@@ -1,0 +1,90 @@
+;; B+ Tree
+
+(defun get-node-type (node)
+  "Get the node type."
+  (nth 0 node))
+
+(defun get-node-order (node)
+  "Get the node order."
+  (nth 1 node))
+
+(defun get-node-keys (node)
+  "Get the node keys vector."
+  (nth 2 node))
+
+(defun get-node-records (node)
+  "Get the node records vector."
+  (nth 3 node))
+
+(defun get-node-next-node (node)
+  "Get the next node."
+  (nth 4 node))
+
+(defun is-node-p (node)
+  "Is the node an internal node?"
+  (eq :node (get-node-type node)))
+
+(defun is-leaf-p (node)
+  "Is the node a leaf?"
+  (eq :leaf (get-node-type node)))
+
+(defun search-keys (keys key &optional (min 0) (max (1- (array-total-size keys))))
+  "Search the given keys vector using binary search. Keys assume to be sorted. Optional mix and max define the search space."
+  (let* ((mid (+ min (ash (- max min) -1)))
+         (value (aref keys mid)))
+    (cond ((or (>= min max) (equal value key)) mid)
+          ((or (null value) (> value key)) (search-keys keys key min (1- mid)))
+          ((< value key) (search-keys keys key (1+ mid) max)))))
+
+(defun find-record (node key)
+  "Get the record with the given key in the given node, nil if none."
+  (let* ((keys (get-node-keys node))
+         (index (search-keys keys key)))
+    (when (equal (aref keys index) key)
+      (aref (get-node-records node) index))))
+
+(defun find-node (node key)
+  "Get the next node using the given key in the given node."
+  (aref (get-node-records node)
+        (search-keys (get-node-keys node) key)))
+
+(defun search-tree (tree key)
+  "Search for a record in the given tree using the given key."
+  (if (is-leaf-p tree)
+      (find-record tree key)
+      (search-tree (find-node tree key) key)))
+
+(defun make-node (order &optional (type :node))
+  "Makes an empty B+ tree node with the given order and the optional type (:leaf or :node)."
+  (list type
+        order
+        (make-array (1- order) :initial-element nil)
+        (make-array order :initial-element nil)
+        nil))
+
+(defun fake-tree ()
+  "Create a b+ tree by hand."
+  (let ((tree (make-node 4 :node))
+        (first-node (make-node 4 :leaf))
+        (second-node (make-node 4 :leaf))
+        (third-node (make-node 4 :leaf)))
+    (setf (aref (get-node-keys first-node) 0) 1)
+    (setf (aref (get-node-keys first-node) 1) 2)
+    (setf (aref (get-node-records first-node) 0) "1")
+    (setf (aref (get-node-records first-node) 1) "2")
+    (setf (aref (get-node-keys second-node) 0) 3)
+    (setf (aref (get-node-keys second-node) 1) 4)
+    (setf (aref (get-node-records second-node) 0) "3")
+    (setf (aref (get-node-records second-node) 1) "4")
+    (setf (aref (get-node-keys third-node) 0) 5)
+    (setf (aref (get-node-keys third-node) 1) 6)
+    (setf (aref (get-node-keys third-node) 2) 7)
+    (setf (aref (get-node-records third-node) 0) "5")
+    (setf (aref (get-node-records third-node) 1) "6")
+    (setf (aref (get-node-records third-node) 2) "7")
+    (setf (aref (get-node-keys tree) 0) 3)
+    (setf (aref (get-node-keys tree) 1) 5)
+    (setf (aref (get-node-records tree) 0) first-node)
+    (setf (aref (get-node-records tree) 1) second-node)
+    (setf (aref (get-node-records tree) 2) third-node)
+    tree))
