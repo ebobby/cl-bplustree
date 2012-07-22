@@ -28,25 +28,29 @@
   "Is the node a leaf?"
   (eq :leaf (get-node-type node)))
 
-(defun search-keys (keys key &optional (min 0) (max (1- (array-total-size keys))))
-  "Search the given keys vector using binary search. Keys assume to be sorted. Optional mix and max define the search space."
-  (let* ((mid (+ min (ash (- max min) -1)))
-         (value (aref keys mid)))
-    (cond ((or (>= min max) (equal value key)) mid)
-          ((or (null value) (> value key)) (search-keys keys key min (1- mid)))
-          ((< value key) (search-keys keys key (1+ mid) max)))))
+(defun search-node-keys (node key)
+  "Search the given node keys vector using binary search. Keys assume to be sorted. Optional mix and max define the search space."
+  (let ((keys (get-node-keys node)))
+    (labels ((binary-search (min max)
+               (if (< max min)
+                   (when (is-node-p node) (1+ max))
+                   (let* ((mid (+ min (ash (- max min) -1)))
+                          (k (aref keys mid)))
+                     (cond ((or (null k) (< key k)) (binary-search min (1- mid)))
+                           ((> key k) (binary-search (1+ mid) max))
+                           (t (+ mid (if (is-node-p node) 1 0))))))))
+      (binary-search 0 (1- (array-total-size keys))))))
 
 (defun find-record (node key)
   "Get the record with the given key in the given node, nil if none."
-  (let* ((keys (get-node-keys node))
-         (index (search-keys keys key)))
-    (when (equal (aref keys index) key)
+  (let ((index (search-node-keys node key)))
+    (unless (null index)
       (aref (get-node-records node) index))))
 
 (defun find-node (node key)
   "Get the next node using the given key in the given node."
   (aref (get-node-records node)
-        (search-keys (get-node-keys node) key)))
+        (search-node-keys node key)))
 
 (defun search-tree (tree key)
   "Search for a record in the given tree using the given key."
