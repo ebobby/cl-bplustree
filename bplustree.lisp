@@ -11,17 +11,27 @@
   "Get the node order."
   (nth 1 node))
 
+(defun get-node-size (node)
+  "Get the node order."
+  (nth 2 node))
+
 (defun get-node-keys (node)
   "Get the node keys vector."
-  (nth 2 node))
+  (nth 3 node))
 
 (defun get-node-records (node)
   "Get the node records vector."
-  (nth 3 node))
+  (nth 4 node))
 
 (defun get-node-next-node (node)
   "Get the next node."
-  (nth 4 node))
+  (nth 5 node))
+
+(defun set-node-type (node type)
+  (setf (nth 0 node) type))
+
+(defun set-node-size (node size)
+  (setf (nth 2 node) size))
 
 (defun is-node-p (node)
   "Is the node an internal node?"
@@ -36,22 +46,22 @@
 
 ;;; Internal tree operations
 
-(defun search-node-keys (node key)
+(defun search-node-keys (node key &key record-search)
   "Search the given node keys vector using binary search. Keys assumed to be sorted. Optional mix and max define the search space."
   (let ((keys (get-node-keys node)))
     (labels ((binary-search (min max)
                (if (< max min)
-                   (when (is-node-p node) (1+ max))
+                   (unless record-search (1+ max))
                    (let* ((mid (+ min (ash (- max min) -1)))
                           (k (aref keys mid)))
                      (cond ((< key k) (binary-search min (1- mid)))
                            ((> key k) (binary-search (1+ mid) max))
-                           (t (+ mid (if (is-node-p node) 1 0))))))))
-      (binary-search 0 (1- (array-total-size keys))))))
+                           (t (+ mid (if record-search 0 1))))))))
+      (binary-search 0 (1- (get-node-size node))))))
 
 (defun find-record (node key)
   "Get the record with the given key in the given node, nil if none."
-  (let ((index (search-node-keys node key)))
+  (let ((index (search-node-keys node key :record-search t)))
     (unless (null index)
       (aref (get-node-records node) index))))
 
@@ -67,16 +77,16 @@
 
 ;;; Public interface
 
-;; (defun insert-to-tree (tree key record)
-;;   "Add a record with the given key to the given tree."
-;;   (labels ((add-record (node)
-;;              (setf (aref (get-node-records node)
-;;                          (vector-push key (get-node-keys node)))
-;;                    record)))
-;;     (let ((node (find-leaf-node tree key)))
-;;       (if (is-node-full-p node)
-;;           nil
-;;           (add-record node)))))
+ ;; (defun insert-to-tree (tree key record)
+ ;;   "Add a record with the given key to the given tree."
+ ;;   (labels ((add-record (node)
+ ;;              (setf (aref (get-node-records node)
+ ;;                          (vector-push key (get-node-keys node)))
+ ;;                    record)))
+ ;;     (let ((node (find-leaf-node tree key)))
+ ;;       (if (is-node-full-p node)
+ ;;           nil
+ ;;           (add-record node)))))
 
 (defun search-tree (tree key)
   "Search for a record in the given tree using the given key."
@@ -86,7 +96,8 @@
   "Makes an empty B+ tree node with the given order and the optional type (:leaf or :node)."
   (list type
         order
-        (make-array (1- order) :fill-pointer 0)
+        0
+        (make-array (1- order) :initial-element nil)
         (make-array order :initial-element nil)
         nil))
 
@@ -115,4 +126,8 @@
     (setf (aref (get-node-records tree) 0) first-node)
     (setf (aref (get-node-records tree) 1) second-node)
     (setf (aref (get-node-records tree) 2) third-node)
+    (set-node-size first-node 1)
+    (set-node-size second-node 2)
+    (set-node-size third-node 3)
+    (set-node-size tree 2)
     tree))
