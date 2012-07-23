@@ -1,4 +1,7 @@
-;; B+ Tree
+;;; General purpose in-memory B+ tree.
+;;;
+
+;;; General access functions
 
 (defun get-node-type (node)
   "Get the node type."
@@ -28,15 +31,20 @@
   "Is the node a leaf?"
   (eq :leaf (get-node-type node)))
 
+(defun is-node-full-p (node)
+  (>= (length (get-node-keys node)) (get-node-order node)))
+
+;;; Internal tree operations
+
 (defun search-node-keys (node key)
-  "Search the given node keys vector using binary search. Keys assume to be sorted. Optional mix and max define the search space."
+  "Search the given node keys vector using binary search. Keys assumed to be sorted. Optional mix and max define the search space."
   (let ((keys (get-node-keys node)))
     (labels ((binary-search (min max)
                (if (< max min)
                    (when (is-node-p node) (1+ max))
                    (let* ((mid (+ min (ash (- max min) -1)))
                           (k (aref keys mid)))
-                     (cond ((or (null k) (< key k)) (binary-search min (1- mid)))
+                     (cond ((< key k) (binary-search min (1- mid)))
                            ((> key k) (binary-search (1+ mid) max))
                            (t (+ mid (if (is-node-p node) 1 0))))))))
       (binary-search 0 (1- (array-total-size keys))))))
@@ -52,19 +60,37 @@
   (aref (get-node-records node)
         (search-node-keys node key)))
 
+(defun find-leaf-node (tree key)
+  (if (is-node-p tree)
+      (find-leaf-node (find-node tree key) key)
+      tree))
+
+;;; Public interface
+
+;; (defun insert-to-tree (tree key record)
+;;   "Add a record with the given key to the given tree."
+;;   (labels ((add-record (node)
+;;              (setf (aref (get-node-records node)
+;;                          (vector-push key (get-node-keys node)))
+;;                    record)))
+;;     (let ((node (find-leaf-node tree key)))
+;;       (if (is-node-full-p node)
+;;           nil
+;;           (add-record node)))))
+
 (defun search-tree (tree key)
   "Search for a record in the given tree using the given key."
-  (if (is-leaf-p tree)
-      (find-record tree key)
-      (search-tree (find-node tree key) key)))
+  (find-record (find-leaf-node tree key) key))
 
 (defun make-node (order &optional (type :node))
   "Makes an empty B+ tree node with the given order and the optional type (:leaf or :node)."
   (list type
         order
-        (make-array (1- order) :initial-element nil)
+        (make-array (1- order) :fill-pointer 0)
         (make-array order :initial-element nil)
         nil))
+
+;;; Testing code
 
 (defun fake-tree ()
   "Create a b+ tree by hand."
@@ -73,9 +99,7 @@
         (second-node (make-node 4 :leaf))
         (third-node (make-node 4 :leaf)))
     (setf (aref (get-node-keys first-node) 0) 1)
-    (setf (aref (get-node-keys first-node) 1) 2)
     (setf (aref (get-node-records first-node) 0) "1")
-    (setf (aref (get-node-records first-node) 1) "2")
     (setf (aref (get-node-keys second-node) 0) 3)
     (setf (aref (get-node-keys second-node) 1) 4)
     (setf (aref (get-node-records second-node) 0) "3")
