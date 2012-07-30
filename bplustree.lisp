@@ -5,39 +5,39 @@
 
 (defun get-node-type (node)
   "Get the B+ tree node type."
-  (nth 0 node))
+  (elt node 0))
 
 (defun set-node-type (node type)
   "Set the B+ tree node type."
-  (setf (nth 0 node) type))
+  (setf (elt node 0) type))
 
 (defun get-node-order (node)
   "Get the B+ tree node order."
-  (nth 1 node))
+  (elt node 1))
 
 (defun get-node-size (node)
   "Get the B+ tree node order."
-  (nth 2 node))
+  (elt node 2))
 
 (defun set-node-size (node size)
   "Set the B+ tree node order."
-  (setf (nth 2 node) size))
+  (setf (elt node 2) size))
 
 (defun get-node-keys (node)
   "Get the node keys vector."
-  (nth 3 node))
+  (elt node 3))
 
 (defun get-node-records (node)
   "Get the node records vector."
-  (nth 4 node))
+  (elt node 4))
 
 (defun get-node-next-node (node)
   "Get the next node following the linked list."
-  (nth 5 node))
+  (elt node 5))
 
 (defun set-node-next-node (node next-node)
   "Set the next node in the linked list."
-  (setf (nth 5 node) next-node))
+  (setf (elt node 5) next-node))
 
 (defun get-node-key (node n)
   "Get the key at the given index from the given B+ tree node."
@@ -76,7 +76,9 @@
 ;;; Internal tree operations
 
 (defun search-node-keys (node key &key record-search)
-  "Search the given node keys vector using binary search. Keys assumed to be sorted. Optional mix and max define the search space."
+  "Search the given node keys vector using binary search.
+   Keys assumed to be sorted. Optional mix and max define the search space.
+   The keyword record-search indicates if you are looking for a record or a node."
   (labels ((binary-search (min max)
              (if (< max min)
                  (unless record-search (1+ max))
@@ -97,19 +99,6 @@
   "Get the next node using the given key in the given node."
   (get-node-record node (search-node-keys node key)))
 
-(defun find-leaf-node (tree key)
-  "Return the leaf node down the B+ tree for the given key."
-  (if (is-node-p tree)
-      (find-leaf-node (find-node tree key) key)
-      tree))
-
-(defun move-records (node index)
-  "Move the keys and records from the given starting point to the right."
-  (let ((max (get-node-size node)))
-    (loop for i from max downto index with j = (1- i) do
-         (set-node-key-record node i (get-node-key node j) (get-node-record node j)))
-    (set-node-key-record node index nil nil)))
-
 (defun make-node (order &optional (type :node))
   "Makes an empty B+ tree node with the given order and the optional type (:leaf or :node)."
   (list type
@@ -121,22 +110,11 @@
 
 ;;; Public interface
 
-(defun insert-to-tree (tree key record)
-  "Add a record with the given key to the given tree."
-  (labels ((add-record (node)
-             (let ((index (search-node-keys node key)))
-               (move-records node (search-node-keys node key))
-               (set-node-key-record node index key record))
-             (set-node-size node (1+ (get-node-size node)))
-             record))
-    (let ((node (find-leaf-node tree key)))
-      (if (is-node-full-p node)
-          nil
-          (add-record node)))))
-
 (defun search-tree (tree key)
   "Search for a record in the given tree using the given key."
-  (find-record (find-leaf-node tree key) key))
+  (if (is-node-p tree)
+      (search-tree (find-node tree key) key)
+      (find-record tree key)))
 
 ;;; Testing code
 
