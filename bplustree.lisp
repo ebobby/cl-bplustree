@@ -122,9 +122,7 @@
   "Move the keys and records from the given starting point to the right."
   (let ((max (get-node-size node)))
     (loop for i from max downto index for j = (1- i) while (> i 0) do
-         (set-node-key node i (get-node-key node j)))
-    (loop for i from (+ max (if (is-node-p node) 1 0))
-       downto index for j = (1- i) while (> i 0) do
+         (set-node-key node i (get-node-key node j))
          (set-node-record node i (get-node-record node j)))
     (set-node-key-record node index nil nil)))
 
