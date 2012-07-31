@@ -155,13 +155,16 @@
 
 ;;; Public interface
 
-(defun tree-search (tree key)
+(defun tree-new (order)
+  (make-node order :leaf))
+
+(defun tree-search (key tree)
   "Search for a record in the given tree using the given key."
   (if (is-node-p tree)
       (search-tree (find-node tree key) key)
       (find-record tree key)))
 
-(defun tree-insert (tree key record)
+(defun tree-insert (key record tree)
   "Insert a record into the given tree using the given key."
   (labels ((add-record (node key record)
              (let ((index (search-node-keys node key)))
