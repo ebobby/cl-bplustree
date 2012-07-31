@@ -159,7 +159,7 @@
               (set-node-size node (1+ (get-node-size node))))))
     (if (is-node-p node)
         (let ((new-node (insert-helper (find-node node key) key record))) ; Go down the tree.
-          (when new-node                                                  ; Do we have a split?                                     ; Do we have a split?
+          (when new-node                                                  ; Do we have a split?
             (add-key node new-node)))
         (let ((update (search-node-keys node key :record-search t)))      ; Is this an update?
           (cond (update (set-node-key-record node update key record) nil) ; Update and return nil.
