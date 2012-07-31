@@ -133,11 +133,13 @@
      with new = (make-node (get-node-order node) (get-node-type node))
      with mid = (ash (get-node-size node) -1)
      with size = (1- (get-node-size node))
+     with node-adjust = (if (is-node-p node) -1 0)
      for i from mid to size
      for j = 0 then (1+ j) do
-       (set-node-key-record new j (get-node-key node i) (get-node-record node i))
+       (set-node-key-record new j (get-node-key node (+ i node-adjust)) (get-node-record node i))
        (set-node-size new (1+ (get-node-size new)))
-       (set-node-key-record node i nil nil)
+       (set-node-key node (+ i node-adjust) nil)
+       (set-node-record node i nil)
        (set-node-size node (1- (get-node-size node)))
      finally (return new)))
 
