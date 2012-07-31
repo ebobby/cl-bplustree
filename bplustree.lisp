@@ -161,7 +161,7 @@
 (defun tree-search (key tree)
   "Search for a record in the given tree using the given key."
   (if (is-node-p tree)
-      (search-tree (find-node tree key) key)
+      (tree-search key (find-node tree key))
       (find-record tree key)))
 
 (defun tree-insert (key record tree)
