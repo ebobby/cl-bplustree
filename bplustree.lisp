@@ -143,75 +143,58 @@
        (set-node-size node (1- (get-node-size node)))
      finally (return new)))
 
-(defun insert-helper (node key record)
-  "Inserts a key/record into a tree, passing up new nodes if splits ocurred."
-  (flet ((add-record (node key record)
-           (let ((index (search-node-keys node key)))
-             (move-records node (search-node-keys node key))
-             (set-node-key-record node index key record)
-             (set-node-size node (1+ (get-node-size node)))))
-         (add-key (node new-node)
-            (let* ((new-key (get-node-key new-node 0))
-                   (index (search-node-keys node new-key)))
-              (move-records node index)
-              (set-node-key-record node index new-key (get-node-record node (1+ index)))
-              (set-node-record node (1+ index) new-node)
-              (set-node-size node (1+ (get-node-size node))))))
-    (if (is-node-p node)
-        (let ((new-node (insert-helper (find-node node key) key record))) ; Go down the tree.
-          (when new-node                                                  ; Do we have a split?
-            (add-key node new-node)))
-        (let ((update (search-node-keys node key :record-search t)))      ; Is this an update?
-          (cond (update (set-node-key-record node update key record) nil) ; Update and return nil.
-                (t (add-record node key record)                           ; Insert, add record.
-                   (when (is-node-illegal-p node)
-                     (split-node node))))))))                             ; Split leaf? Return new node.
+(defun promote-first-key (node)
+  "Promotes the first key in the node, if its a leaf it simply returns it, if its an internal
+   node it returns it but shifts the other keys to the left."
+  (let ((key (get-node-key node 0)))
+    (if (is-leaf-p node)
+      key
+      (loop for i from 0 to (1- (get-node-num-keys node)) do
+           (set-node-key node i (get-node-key node (1+ i)))
+         finally (return key)))))
 
 ;;; Public interface
 
-(defun search-tree (tree key)
+(defun tree-search (tree key)
   "Search for a record in the given tree using the given key."
   (if (is-node-p tree)
       (search-tree (find-node tree key) key)
       (find-record tree key)))
 
-(defun insert-tree (tree key record)
+(defun tree-insert (tree key record)
   "Insert a record into the given tree using the given key."
-  (insert-helper tree key record))
-
-;;; Testing code
-
-(defun fake-tree ()
-  "Create a b+ tree by manually for testing."
-  (let ((tree (make-node 4 :node))
-        (first-node (make-node 4 :leaf))
-        (second-node (make-node 4 :leaf))
-        (third-node (make-node 4 :leaf)))
-    (set-node-key-record first-node 0 1 "1")
-    (set-node-key-record second-node 0 3 "3")
-    (set-node-key-record second-node 1 4 "4")
-    (set-node-key-record second-node 2 5 "5")
-    (set-node-key-record third-node 0 17 "17")
-    (set-node-key-record third-node 1 30 "30")
-    (set-node-key-record tree 0 3 first-node)
-    (set-node-key-record tree 1 17 second-node)
-    (set-node-record tree 2 third-node)
-    (set-node-size first-node 1)
-    (set-node-size second-node 3)
-    (set-node-size third-node 2)
-    (set-node-size tree 3)
-    tree))
-
-(defparameter *a* nil)
-
-(defun runtest ()
-  (defparameter *a* (fake-tree))
-  (insert-tree *a*   6 "6")
-  (insert-tree *a*  -1 "-1")
-  (insert-tree *a*   2 "2")
-  (insert-tree *a*  50 "50")
-  (insert-tree *a* -20 "-20")
-  (insert-tree *a* -50 "-50")
-  (insert-tree *a* -10 "-10")
-  (insert-tree *a* -60 "-60")
-  (insert-tree *a*  60 "60"))
+  (labels ((add-record (node key record)
+             (let ((index (search-node-keys node key)))
+               (move-records node (search-node-keys node key))
+               (set-node-key-record node index key record)
+               (set-node-size node (1+ (get-node-size node)))))
+           (add-key (node new-node)
+             (let* ((new-key (promote-first-key new-node))
+                    (index (search-node-keys node new-key)))
+               (move-records node index)
+               (set-node-key-record node index new-key (get-node-record node (1+ index)))
+               (set-node-record node (1+ index) new-node)
+               (set-node-size node (1+ (get-node-size node)))))
+           (build-new-root (old-root new-node)
+             (let ((new-root (make-node (get-node-order old-root))))
+               (set-node-key new-root 0 (promote-first-key new-node))
+               (set-node-record new-root 0 old-root)
+               (set-node-record new-root 1 new-node)
+               (set-node-size new-root 2)
+               new-root))
+           (insert-helper (node key record)
+             (if (is-node-p node)
+                 (let ((new-node (insert-helper (find-node node key) key record))) ; Go down the tree.
+                   (when new-node                                                  ; Do we have a split?
+                     (add-key node new-node)
+                     (when (is-node-illegal-p node)
+                       (split-node node))))
+                 (let ((update (search-node-keys node key :record-search t)))      ; Is this an update?
+                   (cond (update (set-node-key-record node update key record) nil) ; Update and return nil.
+                         (t (add-record node key record)                           ; Insert, add record.
+                            (when (is-node-illegal-p node)
+                              (split-node node))))))))                            ; Split leaf? Return new node.
+    (let ((new-node (insert-helper tree key record)))
+      (if new-node
+          (build-new-root tree new-node)
+          tree))))
