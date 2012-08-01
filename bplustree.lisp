@@ -3,96 +3,79 @@
 
 ;;; General access functions
 
-(defun get-node-type (node)
-  "Get the B+ tree node type."
-  (elt node 0))
+; Our node type.
+(defstruct bplustree-node
+  kind
+  order
+  size
+  keys
+  records
+  next-node)
 
-(defun set-node-type (node type)
-  "Set the B+ tree node type."
-  (setf (elt node 0) type))
+; Builder of getter functions based on the setters given by the node struct.
+(defmacro build-bplustree-node-setter (column)
+  "Generates the setter functions for the btreeplus-node structure."
+  (let* ((package (symbol-package column))
+         (struct-getter (intern (concatenate 'string (string 'bplustree-node-) (string column)) package))
+         (setter (intern (concatenate 'string (string struct-getter) (string '-set)) package)))
+    `(defun ,setter (node value)
+       (setf (,struct-getter node) value))))
 
-(defun get-node-order (node)
-  "Get the B+ tree node order."
-  (elt node 1))
+; Builder of getter/getter functions of individual items in internal node collections.
+(defmacro build-bplustree-node-collection-accesors (column)
+  "Generates the getter/setter functions for the btreeplus-node internal collections, keys and records."
+  (let* ((package (symbol-package column))
+         (getter (intern (concatenate 'string (string 'bplustree-node-) (string column)) package))
+         (setter (intern (concatenate 'string (string getter) (string '-set)) package))
+         (base-collection (intern (concatenate 'string (string getter) (string 's)) (symbol-package column))))
+    `(progn
+       (defun ,getter (node i) (aref (,base-collection node) i))
+       (defun ,setter (node i value) (setf (aref (,base-collection node) i) value)))))
 
-(defun get-node-size (node)
-  "Get the B+ tree node order."
-  (elt node 2))
+; Build setter functions, analogous to the getters already provided by defstruct.
+(build-bplustree-node-setter kind)
+(build-bplustree-node-setter order)
+(build-bplustree-node-setter size)
+(build-bplustree-node-setter next-node)
 
-(defun set-node-size (node size)
-  "Set the B+ tree node order."
-  (setf (elt node 2) size))
+; Build specialized functions to access the key and record internal collections.
+(build-bplustree-node-collection-accesors key)
+(build-bplustree-node-collection-accesors record)
 
-(defun get-node-keys (node)
-  "Get the node keys vector."
-  (elt node 3))
-
-(defun get-node-records (node)
-  "Get the node records vector."
-  (elt node 4))
-
-(defun get-node-next-node (node)
-  "Get the next node following the linked list."
-  (elt node 5))
-
-(defun set-node-next-node (node next-node)
-  "Set the next node in the linked list."
-  (setf (elt node 5) next-node))
-
-(defun get-node-key (node n)
-  "Get the key at the given index from the given B+ tree node."
-  (aref (get-node-keys node) n))
-
-(defun set-node-key (node n key)
-  "Set the key at the given index to the given B+ tree node."
-  (setf (aref (get-node-keys node) n) key))
-
-(defun get-node-record (node n)
-  "Get the record at the given index from the given B+ tree node."
-  (aref (get-node-records node) n))
-
-(defun set-node-record (node n record)
-  "Set the record at the given index to the given B+ tree node."
-  (setf (aref (get-node-records node) n) record))
-
-(defun is-node-p (node)
+(defun bplustree-node-internal-p (node)
   "Is the node an internal node?"
-  (eq :node (get-node-type node)))
+  (eq :internal (bplustree-node-kind node)))
 
-(defun is-leaf-p (node)
+(defun bplustree-node-leaf-p (node)
   "Is the node a leaf?"
-  (eq :leaf (get-node-type node)))
+  (eq :leaf (bplustree-node-kind node)))
 
-(defun is-node-full-p (node)
-  "Is the node full? (Leaf nodes are full at order - 1)."
-  (>= (get-node-size node)
-      (- (get-node-order node) (if (is-leaf-p node) 1 0))))
-
-(defun is-node-illegal-p (node)
+(defun bplustree-node-illegal-p (node)
   "Does the node have more records than it should?"
-  (> (get-node-size node)
-     (get-node-order node)))
+  (> (bplustree-node-size node)
+     (bplustree-node-order node)))
 
-(defun set-node-key-record (node n key record)
+(defun bplustree-node-key-record-set (node n key record)
   "Sets both the key and record at the given index  to the given B+ node."
-  (set-node-key node n key)
-  (set-node-record node n record))
+  (bplustree-node-key-set node n key)
+  (bplustree-node-record-set node n record))
 
-(defun get-node-num-keys (node)
+(defun bplustree-node-num-keys (node)
   "Get the number of keys based on the node size and node type."
-  (- (get-node-size node)
-     (if (is-node-p node) 1 0)))
+  (- (bplustree-node-size node)
+     (if (bplustree-node-internal-p node) 1 0)))
 
 ;;; Internal tree operations
 
-(defun make-node (order &optional (type :node))
-  "Makes an empty B+ tree node with the given order and the optional type (:leaf or :node)."
-  (list type                                           ; Node type (:leaf or :node)
-        order                                          ; Order
-        0                                              ; Size
-        (make-array (1+ order) :initial-element nil)   ; Keys
-        (make-array (1+ order) :initial-element nil)   ; Nodes
-        nil))                                          ; Next node (leaves only)
+(defun make-node (order &optional (kind :internal))
+  "Makes an empty B+ tree node with the given order and the optional type (:leaf or :internal)."
+  (make-bplustree-node
+   :order order
+   :size 0
+   :kind kind
+   :keys (make-array (1+ order) :initial-element nil)
+   :records (make-array (1+ order) :initial-element nil)
+   :next-node nil))
 
 (defun search-node-keys (node key &key record-search)
   "Search the given node keys vector using binary search.
@@ -102,102 +85,135 @@
              (if (< max min)
                  (unless record-search (1+ max))
                  (let* ((mid (+ min (ash (- max min) -1)))
-                        (k (get-node-key node mid)))
+                        (k (bplustree-node-key node mid)))
                    (cond ((< key k) (binary-search min (1- mid)))
                          ((> key k) (binary-search (1+ mid) max))
                          (t (+ mid (if record-search 0 1))))))))
-    (binary-search 0 (1- (get-node-num-keys node)))))
+    (binary-search 0 (1- (bplustree-node-num-keys node)))))
 
 (defun find-record (node key)
   "Get the record with the given key in the given node, nil if none."
   (let ((index (search-node-keys node key :record-search t)))
     (unless (null index)
-      (get-node-record node index))))
+      (bplustree-node-record node index))))
 
 (defun find-node (node key)
   "Get the next node using the given key in the given node."
-  (get-node-record node (search-node-keys node key)))
+  (bplustree-node-record node (search-node-keys node key)))
 
 (defun move-records (node index)
   "Move the keys and records from the given starting point to the right."
-  (let ((max (get-node-size node)))
+  (let ((max (bplustree-node-size node)))
     (loop for i from max downto index for j = (1- i) while (> i 0) do
-         (set-node-key node i (get-node-key node j))
-         (set-node-record node i (get-node-record node j)))
-    (set-node-key-record node index nil nil)))
+         (bplustree-node-key-set node i (bplustree-node-key node j))
+         (bplustree-node-record-set node i (bplustree-node-record node j)))
+    (bplustree-node-key-record-set node index nil nil)))
 
 (defun split-node (node)
   "Creates a new node and copies the upper half of the key/records in node,
    returning the new node."
   (loop
-     with new = (make-node (get-node-order node) (get-node-type node))
-     with mid = (ash (get-node-size node) -1)
-     with size = (1- (get-node-size node))
-     with node-adjust = (if (is-node-p node) -1 0)
+     with new = (make-node (bplustree-node-order node) (bplustree-node-kind node))
+     with mid = (ash (bplustree-node-size node) -1)
+     with size = (1- (bplustree-node-size node))
+     with node-adjust = (if (bplustree-node-internal-p node) -1 0)
      for i from mid to size
      for j = 0 then (1+ j) do
-       (set-node-key-record new j (get-node-key node (+ i node-adjust)) (get-node-record node i))
-       (set-node-size new (1+ (get-node-size new)))
-       (set-node-key node (+ i node-adjust) nil)
-       (set-node-record node i nil)
-       (set-node-size node (1- (get-node-size node)))
-     finally (return new)))
+       (bplustree-node-key-record-set new j (bplustree-node-key node (+ i node-adjust)) (bplustree-node-record node i))
+       (bplustree-node-size-set new (1+ (bplustree-node-size new)))
+       (bplustree-node-key-set node (+ i node-adjust) nil)
+       (bplustree-node-record-set node i nil)
+       (bplustree-node-size-set node (1- (bplustree-node-size node)))
+     finally
+       (bplustree-node-next-node-set node (when (bplustree-node-leaf-p node) new))
+       (return new)))
 
 (defun promote-first-key (node)
   "Promotes the first key in the node, if its a leaf it simply returns it, if its an internal
    node it returns it but shifts the other keys to the left."
-  (let ((key (get-node-key node 0)))
-    (if (is-leaf-p node)
-      key
-      (loop for i from 0 to (1- (get-node-num-keys node)) do
-           (set-node-key node i (get-node-key node (1+ i)))
-         finally (return key)))))
+  (let ((key (bplustree-node-key node 0))
+        (num-keys (bplustree-node-num-keys node)))
+    (if (bplustree-node-leaf-p node)
+        key
+        (loop for i from 0 to (1- num-keys) do
+             (bplustree-node-key-set node i (bplustree-node-key node (1+ i)))
+           finally (bplustree-node-key-set node num-keys nil)  (return key)))))
 
 ;;; Public interface
 
-(defun tree-new (order)
+(defun bplustree-new (order)
+  "Makes a new B+ tree with the given order."
   (make-node order :leaf))
 
-(defun tree-search (key tree)
+(defun bplustree-search (key tree)
   "Search for a record in the given tree using the given key."
-  (if (is-node-p tree)
-      (tree-search key (find-node tree key))
+  (if (bplustree-node-internal-p tree)
+      (bplustree-search key (find-node tree key))
       (find-record tree key)))
 
-(defun tree-insert (key record tree)
-  "Insert a record into the given tree using the given key."
+(defun bplustree-insert (key record tree)
+  "Insert a record into the given tree using the given key.
+   Returns the tree with the new record inserted. This call may destroy the given tree."
   (labels ((add-record (node key record)
              (let ((index (search-node-keys node key)))
                (move-records node (search-node-keys node key))
-               (set-node-key-record node index key record)
-               (set-node-size node (1+ (get-node-size node)))))
+               (bplustree-node-key-record-set node index key record)
+               (bplustree-node-size-set node (1+ (bplustree-node-size node)))))
            (add-key (node new-node)
              (let* ((new-key (promote-first-key new-node))
                     (index (search-node-keys node new-key)))
                (move-records node index)
-               (set-node-key-record node index new-key (get-node-record node (1+ index)))
-               (set-node-record node (1+ index) new-node)
-               (set-node-size node (1+ (get-node-size node)))))
+               (bplustree-node-key-record-set node index new-key (bplustree-node-record node (1+ index)))
+               (bplustree-node-record-set node (1+ index) new-node)
+               (bplustree-node-size-set node (1+ (bplustree-node-size node)))))
            (build-new-root (old-root new-node)
-             (let ((new-root (make-node (get-node-order old-root))))
-               (set-node-key new-root 0 (promote-first-key new-node))
-               (set-node-record new-root 0 old-root)
-               (set-node-record new-root 1 new-node)
-               (set-node-size new-root 2)
+             (let ((new-root (make-node (bplustree-node-order old-root))))
+               (bplustree-node-key-set new-root 0 (promote-first-key new-node))
+               (bplustree-node-record-set new-root 0 old-root)
+               (bplustree-node-record-set new-root 1 new-node)
+               (bplustree-node-size-set new-root 2)
                new-root))
            (insert-helper (node key record)
-             (if (is-node-p node)
-                 (let ((new-node (insert-helper (find-node node key) key record))) ; Go down the tree.
-                   (when new-node                                                  ; Do we have a split?
-                     (add-key node new-node)
-                     (when (is-node-illegal-p node)
-                       (split-node node))))
+             (if (bplustree-node-internal-p node)
+                 (let ((new-node (insert-helper (find-node node key) key record))) ; Traverse down the tree.
+                   (when new-node                                                  ; Did we have a split?
+                     (add-key node new-node)                                       ; Insert new node into its parent.
+                     (when (bplustree-node-illegal-p node)                         ; Is this node larger than it should?
+                       (split-node node))))                                        ; Split it.
                  (let ((update (search-node-keys node key :record-search t)))      ; Is this an update?
-                   (cond (update (set-node-key-record node update key record) nil) ; Update and return nil.
-                         (t (add-record node key record)                           ; Insert, add record.
-                            (when (is-node-illegal-p node)
-                              (split-node node))))))))                            ; Split leaf? Return new node.
+                   (cond (update (bplustree-node-key-record-set node update key record) nil)
+                         (t (add-record node key record)                           ; Add record.
+                            (when (bplustree-node-illegal-p node)                  ; Illegal leaf?
+                              (split-node node))))))))                             ; Split it and return new node.
     (let ((new-node (insert-helper tree key record)))
       (if new-node
-          (build-new-root tree new-node)
+          (build-new-root tree new-node)                                           ; Have a new node? Build a new root.
           tree))))
+
+(defun bplustree-insert-many (tree &rest items)
+  "Insert as many pairs of key/record given in the form of (key record) into the tree.
+   Returns the tree with the new records inserted. This call may destroy the given tree."
+  (loop
+     for (key record) in items
+     do (setf tree (bplustree-insert key record tree))
+     finally (return tree)))
+
+;;; Testing code disregard
+
+; Simple tree to test
+(defun fake-tree ()
+  "Create a b+ tree by manually for testing."
+  (apply #'bplustree-insert-many (bplustree-new 4)
+         '((4 "4") (1 "1") (3 "3") (17 "17") (30 "30") (5 "5"))))
+
+; Used to run simple tests.
+(defun runtest ()
+   (bplustree-insert-many (fake-tree)
+                          '(6 "6")
+                          '(-1 "-1")
+                          '(2 "2")
+                          '(50 "50")
+                          '(-20 "-20")
+                          '(-10 "-10")
+                          '(142 "142")
+                          '(7 "7")))
