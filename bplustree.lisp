@@ -197,23 +197,3 @@
      for (key record) in items
      do (setf tree (bplustree-insert key record tree))
      finally (return tree)))
-
-;;; Testing code disregard
-
-; Simple tree to test
-(defun fake-tree ()
-  "Create a b+ tree by manually for testing."
-  (apply #'bplustree-insert-many (bplustree-new 4)
-         '((4 "4") (1 "1") (3 "3") (17 "17") (30 "30") (5 "5"))))
-
-; Used to run simple tests.
-(defun runtest ()
-   (bplustree-insert-many (fake-tree)
-                          '(6 "6")
-                          '(-1 "-1")
-                          '(2 "2")
-                          '(50 "50")
-                          '(-20 "-20")
-                          '(-10 "-10")
-                          '(142 "142")
-                          '(7 "7")))
