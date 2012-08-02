@@ -1,5 +1,7 @@
 ;;; General purpose in-memory B+ tree.
-;;;
+;;; Copyright (c) 2012, Francisco Soto All rights reserved (see COPYING file for details).
+
+(in-package :bplustree)
 
 ;;; General access functions
 
