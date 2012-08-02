@@ -8,6 +8,7 @@
   kind
   order
   size
+  depth
   keys
   records
   next-node)
@@ -36,6 +37,7 @@
 (build-bplustree-node-setter kind)
 (build-bplustree-node-setter order)
 (build-bplustree-node-setter size)
+(build-bplustree-node-setter depth)
 (build-bplustree-node-setter next-node)
 
 ; Build specialized functions to access the key and record internal collections.
@@ -72,6 +74,7 @@
   (make-bplustree-node
    :order order
    :size 0
+   :depth 0
    :kind kind
    :keys (make-array (1+ order) :initial-element nil)
    :records (make-array (1+ order) :initial-element nil)
@@ -101,6 +104,12 @@
   "Get the next node using the given key in the given node."
   (bplustree-node-record node (search-node-keys node key)))
 
+(defun find-leaf-node (node key)
+  "Find the proper leaf node for the given key."
+  (if (bplustree-node-internal-p node)
+      (find-leaf-node (find-node node key) key)
+      node))
+
 (defun move-records (node index)
   "Move the keys and records from the given starting point to the right."
   (let ((max (bplustree-node-size node)))
@@ -125,6 +134,7 @@
        (bplustree-node-record-set node i nil)
        (bplustree-node-size-set node (1- (bplustree-node-size node)))
      finally
+       (bplustree-node-depth-set new (bplustree-node-depth node))
        (bplustree-node-next-node-set node (when (bplustree-node-leaf-p node) new))
        (return new)))
 
@@ -147,9 +157,24 @@
 
 (defun bplustree-search (key tree)
   "Search for a record in the given tree using the given key."
-  (if (bplustree-node-internal-p tree)
-      (bplustree-search key (find-node tree key))
-      (find-record tree key)))
+  (find-record (find-leaf-node tree key) key))
+
+(defun bplustree-search-range (from to tree)
+  "Search and return a range of records in the given tree between from and to inclusive."
+  (loop
+     with current-node = (find-leaf-node tree from)
+     with initial-index = (search-node-keys tree from)
+     until (null current-node)
+     appending
+       (loop
+          for i from initial-index to (1- (bplustree-node-num-keys current-node))
+          for key = (bplustree-node-key current-node i)
+          for record = (bplustree-node-record current-node i)
+          while (<= key to)
+          collect (list key record)
+          finally
+            (setf current-node (bplustree-node-next-node current-node))
+            (setf initial-index 0))))
 
 (defun bplustree-insert (key record tree)
   "Insert a record into the given tree using the given key.
@@ -172,6 +197,7 @@
                (bplustree-node-record-set new-root 0 old-root)
                (bplustree-node-record-set new-root 1 new-node)
                (bplustree-node-size-set new-root 2)
+               (bplustree-node-depth-set new-root (1+ (bplustree-node-depth old-root)))
                new-root))
            (insert-helper (node key record)
              (if (bplustree-node-internal-p node)
