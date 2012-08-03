@@ -71,12 +71,12 @@
 
 ;;; Internal tree operations
 
-(defun make-node (order &optional (kind :internal))
+(defun make-node (order &optional (kind :internal) (depth 1))
   "Makes an empty B+ tree node with the given order and the optional type (:leaf or :internal)."
   (make-bplustree-node
    :order order
    :size 0
-   :depth 0
+   :depth depth
    :kind kind
    :keys (make-array (1+ order) :initial-element nil)
    :records (make-array (1+ order) :initial-element nil)
@@ -112,19 +112,21 @@
       (find-leaf-node (find-node node key) key)
       node))
 
-(defun move-records (node index)
+(defun move-records-right (node index)
   "Move the keys and records from the given starting point to the right."
-  (let ((max (bplustree-node-size node)))
-    (loop for i from max downto index for j = (1- i) while (> i 0) do
-         (bplustree-node-key-set node i (bplustree-node-key node j))
-         (bplustree-node-record-set node i (bplustree-node-record node j)))
-    (bplustree-node-key-record-set node index nil nil)))
+  (loop
+     with max = (bplustree-node-size node)
+     for i from max downto index for j = (1- i) while (> i 0) do
+       (bplustree-node-key-set node i (bplustree-node-key node j))
+       (bplustree-node-record-set node i (bplustree-node-record node j))
+     finally
+       (bplustree-node-key-record-set node index nil nil)))
 
 (defun split-node (node)
   "Creates a new node and copies the upper half of the key/records in node,
    returning the new node."
   (loop
-     with new = (make-node (bplustree-node-order node) (bplustree-node-kind node))
+     with new = (make-node (bplustree-node-order node) (bplustree-node-kind node) (bplustree-node-depth node))
      with mid = (ash (bplustree-node-size node) -1)
      with size = (1- (bplustree-node-size node))
      with node-adjust = (if (bplustree-node-internal-p node) -1 0)
@@ -136,8 +138,9 @@
        (bplustree-node-record-set node i nil)
        (bplustree-node-size-set node (1- (bplustree-node-size node)))
      finally
-       (bplustree-node-depth-set new (bplustree-node-depth node))
-       (bplustree-node-next-node-set node (when (bplustree-node-leaf-p node) new))
+       (when (bplustree-node-leaf-p node)
+         (bplustree-node-next-node-set new (bplustree-node-next-node node))
+         (bplustree-node-next-node-set node new))
        (return new)))
 
 (defun promote-first-key (node)
@@ -183,13 +186,13 @@
    Returns the tree with the new record inserted. This call may destroy the given tree."
   (labels ((add-record (node key record)
              (let ((index (search-node-keys node key)))
-               (move-records node (search-node-keys node key))
+               (move-records-right node (search-node-keys node key))
                (bplustree-node-key-record-set node index key record)
                (bplustree-node-size-set node (1+ (bplustree-node-size node)))))
            (add-key (node new-node)
              (let* ((new-key (promote-first-key new-node))
                     (index (search-node-keys node new-key)))
-               (move-records node index)
+               (move-records-right node index)
                (bplustree-node-key-record-set node index new-key (bplustree-node-record node (1+ index)))
                (bplustree-node-record-set node (1+ index) new-node)
                (bplustree-node-size-set node (1+ (bplustree-node-size node)))))
