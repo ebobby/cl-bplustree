@@ -275,33 +275,30 @@
 ;; Sketch code
 
 (defun balance-node (node index)
-  (cond ((and (plusp index)
+  (cond ((and (plusp index)     ; Transfer record from the left side node.
               (> (bplustree-node-size (bplustree-node-record node (1- index)))
-                 (bplustree-node-min-size (bplustree-node-record node (1- index))))) ; Transfer record from the left side node.
+                 (bplustree-node-min-size (bplustree-node-record node (1- index)))))
          (let* ((l-node (bplustree-node-record node (1- index)))
                 (r-node (bplustree-node-record node index))
                 (l-node-key-i (1- (bplustree-node-num-keys l-node)))
                 (l-node-record-i (1- (bplustree-node-size l-node))))
            (move-records-right r-node 0)
-           (bplustree-node-key-record-set r-node 0
-                                          (bplustree-node-key l-node l-node-key-i)
-                                          (bplustree-node-record l-node l-node-record-i))
-           (bplustree-node-key-set l-node l-node-key-i nil)
-           (bplustree-node-record-set l-node l-node-record-i nil)
+           (bplustree-node-key-transfer l-node r-node l-node-key-i 0 :set-source-nil t)
+           (bplustree-node-record-transfer l-node r-node l-node-record-i 0 :set-source-nil t)
            (when (bplustree-node-internal-p r-node)
              (bplustree-node-key-set r-node 0 (promote-first-key (bplustree-node-record r-node 1) :no-shift t)))
            (bplustree-node-key-set node (1- index) (promote-first-key r-node :no-shift t))
            (bplustree-node-size-dec l-node)
            (bplustree-node-size-inc r-node)))
-        ((and (< index (1- (bplustree-node-size node)))
+        ((and (< index (1- (bplustree-node-size node))) ; Transfer record from the right side node.
               (> (bplustree-node-size (bplustree-node-record node (1+ index)))
-                 (bplustree-node-min-size (bplustree-node-record node (1+ index))))) ; Transfer record from the left side node.
+                 (bplustree-node-min-size (bplustree-node-record node (1+ index)))))
          (let* ((l-node (bplustree-node-record node index))
                 (r-node (bplustree-node-record node (1+ index)))
                 (l-node-key-i (bplustree-node-num-keys l-node))
                 (l-node-record-i (bplustree-node-size l-node)))
-           (bplustree-node-key-set l-node l-node-key-i (bplustree-node-key r-node 0))
-           (bplustree-node-record-set l-node l-node-record-i (bplustree-node-record r-node 0))
+           (bplustree-node-key-transfer r-node l-node 0 l-node-key-i)
+           (bplustree-node-record-transfer r-node l-node 0 l-node-record-i)
            (move-records-left r-node 0)
            (when (bplustree-node-internal-p l-node)
              (bplustree-node-key-set l-node l-node-key-i (promote-first-key (bplustree-node-record l-node l-node-record-i) :no-shift t)))
