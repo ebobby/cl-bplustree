@@ -60,7 +60,7 @@
 
 (defun bplustree-node-underflow-p (node)
   "Does the node have less records than it should?"
-  (< (bplustree-node-size node) (ceiling (/ (bplustree-node-order node) 2))))
+  (< (bplustree-node-size node) (bplustree-node-min-size node)))
 
 (defun bplustree-node-key-record-set (node n key record)
   "Sets both the key and record at the given index  to the given B+ node."
@@ -71,6 +71,10 @@
   "Get the number of keys based on the node size and node type."
   (- (bplustree-node-size node)
      (if (bplustree-node-internal-p node) 1 0)))
+
+(defun bplustree-node-min-size (node)
+  "Returns the minimum size a node can have (except root)."
+  (ceiling (/ (bplustree-node-order node) 2)))
 
 ;;; Internal tree operations
 
@@ -199,7 +203,7 @@
 
 (defun bplustree-insert (key record tree)
   "Insert a record into the given tree using the given key.
-   Returns the tree with the new record inserted. This call may destroy the given tree."
+   Returns the tree with the new record inserted. This call destroys the given tree."
   (labels ((add-record (node key record)
              (let ((index (search-node-keys node key)))
                (move-records-right node (search-node-keys node key))
@@ -225,12 +229,12 @@
                  (let ((new-node (insert-helper (find-node node key) key record))) ; Traverse down the tree.
                    (when new-node                                                  ; Did we have a split?
                      (add-key node new-node)                                       ; Insert new node into its parent.
-                     (when (bplustree-node-overflow-p node)                         ; Is this node larger than it should?
+                     (when (bplustree-node-overflow-p node)                        ; Is this node larger than it should?
                        (split-node node))))                                        ; Split it.
                  (let ((update (search-node-keys node key :record-search t)))      ; Is this an update?
                    (cond (update (bplustree-node-key-record-set node update key record) nil)
                          (t (add-record node key record)                           ; Add record.
-                            (when (bplustree-node-overflow-p node)                  ; Illegal leaf?
+                            (when (bplustree-node-overflow-p node)                 ; Illegal leaf?
                               (split-node node))))))))                             ; Split it and return new node.
     (let ((new-node (insert-helper tree key record)))
       (if new-node
@@ -239,7 +243,7 @@
 
 (defun bplustree-insert-many (tree &rest items)
   "Insert as many pairs of key/record given in the form of (key record) into the tree.
-   Returns the tree with the new records inserted. This call may destroy the given tree."
+   Returns the tree with the new records inserted. This call destroys the given tree."
   (loop
      for (key record) in items
      do (setf tree (bplustree-insert key record tree))
