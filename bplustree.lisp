@@ -147,7 +147,7 @@
    returning the new node."
   (loop
      with new = (make-node (bplustree-node-order node) (bplustree-node-kind node) (bplustree-node-depth node))
-     with mid = (ash (bplustree-node-size node) -1)
+     with mid = (bplustree-node-min-size node)
      with size = (1- (bplustree-node-size node))
      with node-adjust = (if (bplustree-node-internal-p node) -1 0)
      for i from mid to size
@@ -163,16 +163,19 @@
          (bplustree-node-next-node-set node new))
        (return new)))
 
-(defun promote-first-key (node)
+(defun promote-first-key (node &key no-shift)
   "Promotes the first key in the node, if its a leaf it simply returns it, if its an internal
    node it returns it but shifts the other keys to the left."
   (let ((key (bplustree-node-key node 0))
         (num-keys (bplustree-node-num-keys node)))
-    (if (bplustree-node-leaf-p node)
+    (if (or (bplustree-node-leaf-p node) no-shift)
         key
-        (loop for i from 0 to (1- num-keys) do
-             (bplustree-node-key-set node i (bplustree-node-key node (1+ i)))
-           finally (bplustree-node-key-set node num-keys nil)  (return key)))))
+        (loop
+           for i from 0 to (1- num-keys)
+           do (bplustree-node-key-set node i (bplustree-node-key node (1+ i)))
+           finally
+             (bplustree-node-key-set node num-keys nil)
+             (return key)))))
 
 ;;; Public interface
 
