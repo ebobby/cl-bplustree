@@ -261,22 +261,40 @@
 ;; Sketch code
 
 (defun balance-node (node index)
-  (cond ((and (plusp index) (> (bplustree-node-size (bplustree-node-record node (1- index)))
-                               (bplustree-node-min-size (bplustree-node-record node (1- index))))) ; Transfer record from the left side node.
-         (let ((l-node (bplustree-node-record node (1- index)))
-               (r-node (bplustree-node-record node index)))
+  (cond ((and (plusp index)
+              (> (bplustree-node-size (bplustree-node-record node (1- index)))
+                 (bplustree-node-min-size (bplustree-node-record node (1- index))))) ; Transfer record from the left side node.
+         (let* ((l-node (bplustree-node-record node (1- index)))
+                (r-node (bplustree-node-record node index))
+                (l-node-key-i (1- (bplustree-node-num-keys l-node)))
+                (l-node-record-i (1- (bplustree-node-size l-node))))
            (move-records-right r-node 0)
-           (bplustree-node-key-set r-node 0 (bplustree-node-key l-node (1- (bplustree-node-num-keys l-node))))
-           (bplustree-node-record-set r-node 0 (bplustree-node-record l-node (1- (bplustree-node-size l-node))))
-           (bplustree-node-key-set l-node (1- (bplustree-node-num-keys l-node)) nil)
-           (bplustree-node-record-set l-node (1- (bplustree-node-size l-node)) nil)
-           ; If these nodes are not leaves, we need to fetch the key from down the tree.
-           ; The first key comes from the second record. (This can be improved by having a function to get the key out of a record)
+           (bplustree-node-key-record-set r-node 0
+                                          (bplustree-node-key l-node l-node-key-i)
+                                          (bplustree-node-record l-node l-node-record-i))
+           (bplustree-node-key-set l-node l-node-key-i nil)
+           (bplustree-node-record-set l-node l-node-record-i nil)
            (when (bplustree-node-internal-p r-node)
              (bplustree-node-key-set r-node 0 (promote-first-key (bplustree-node-record r-node 1) :no-shift t)))
            (bplustree-node-key-set node (1- index) (promote-first-key r-node :no-shift t))
-           (bplustree-node-size-set l-node (1- (bplustree-node-size l-node)))
-           (bplustree-node-size-set r-node (1+ (bplustree-node-size r-node)))))))
+           (bplustree-node-size-dec l-node)
+           (bplustree-node-size-inc r-node)))
+        ((and (< index (1- (bplustree-node-size node)))
+              (> (bplustree-node-size (bplustree-node-record node (1+ index)))
+                 (bplustree-node-min-size (bplustree-node-record node (1+ index))))) ; Transfer record from the left side node.
+         (let* ((l-node (bplustree-node-record node index))
+                (r-node (bplustree-node-record node (1+ index)))
+                (l-node-key-i (bplustree-node-num-keys l-node))
+                (l-node-record-i (bplustree-node-size l-node)))
+           (bplustree-node-key-set l-node l-node-key-i (bplustree-node-key r-node 0))
+           (bplustree-node-record-set l-node l-node-record-i (bplustree-node-record r-node 0))
+           (move-records-left r-node 0)
+           (when (bplustree-node-internal-p l-node)
+             (bplustree-node-key-set l-node l-node-key-i (promote-first-key (bplustree-node-record l-node l-node-record-i) :no-shift t)))
+           (bplustree-node-key-set node index (promote-first-key r-node :no-shift t))
+           (bplustree-node-size-inc l-node)
+           (bplustree-node-size-dec r-node)))
+        (t nil)))
 
 (defun bplustree-delete (key tree)
   (labels ((delete-helper (key node)
@@ -285,7 +303,9 @@
                         (child-node (bplustree-node-record node index)))
                    (delete-helper key child-node)
                    (when (bplustree-node-underflow-p child-node)
-                     (balance-node node index)))
+                     (if (balance-node node index)
+                         (princ "Balanced")
+                         (princ "Not balanced"))))
                  (let ((index (search-node-keys node key :record-search t))) ; Simple leaf delete.
                    (when index
                      (move-records-left node index)
