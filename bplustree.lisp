@@ -76,6 +76,14 @@
   "Returns the minimum size a node can have (except root)."
   (ceiling (/ (bplustree-node-order node) 2)))
 
+(defun bplustree-node-size-inc (node)
+  "Increments the node size by one."
+  (bplustree-node-size-set node (1+ (bplustree-node-size node))))
+
+(defun bplustree-node-size-dec (node)
+  "Decrements the node size by one."
+  (bplustree-node-size-set node (1- (bplustree-node-size node))))
+
 ;;; Internal tree operations
 
 (defun make-node (order &optional (kind :internal) (depth 1))
@@ -153,10 +161,10 @@
      for i from mid to size
      for j = 0 then (1+ j) do
        (bplustree-node-key-record-set new j (bplustree-node-key node (+ i node-adjust)) (bplustree-node-record node i))
-       (bplustree-node-size-set new (1+ (bplustree-node-size new)))
+       (bplustree-node-size-inc new)
        (bplustree-node-key-set node (+ i node-adjust) nil)
        (bplustree-node-record-set node i nil)
-       (bplustree-node-size-set node (1- (bplustree-node-size node)))
+       (bplustree-node-size-dec node)
      finally
        (when (bplustree-node-leaf-p node)
          (bplustree-node-next-node-set new (bplustree-node-next-node node))
@@ -211,14 +219,14 @@
              (let ((index (search-node-keys node key)))
                (move-records-right node (search-node-keys node key))
                (bplustree-node-key-record-set node index key record)
-               (bplustree-node-size-set node (1+ (bplustree-node-size node)))))
+               (bplustree-node-size-inc node)))
            (add-key (node new-node)
              (let* ((new-key (promote-first-key new-node))
                     (index (search-node-keys node new-key)))
                (move-records-right node index)
                (bplustree-node-key-record-set node index new-key (bplustree-node-record node (1+ index)))
                (bplustree-node-record-set node (1+ index) new-node)
-               (bplustree-node-size-set node (1+ (bplustree-node-size node)))))
+               (bplustree-node-size-inc node)))
            (build-new-root (old-root new-node)
              (let ((new-root (make-node (bplustree-node-order old-root))))
                (bplustree-node-key-set new-root 0 (promote-first-key new-node))
