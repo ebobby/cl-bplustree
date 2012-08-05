@@ -1,6 +1,0 @@
-
-h2. cl-bplustree -- A Common Lisp implementation of an in-memory B+ tree.
-
-h3. Dependencies
-
-NONE (so far)
