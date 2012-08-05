@@ -15,7 +15,6 @@
   records
   next-node)
 
-; Builder of getter functions based on the setters given by the node struct.
 (defmacro build-bplustree-node-setter (column)
   "Generates the setter functions for the btreeplus-node structure."
   (let* ((package (symbol-package column))
@@ -24,7 +23,6 @@
     `(defun ,setter (node value)
        (setf (,struct-getter node) value))))
 
-; Builder of getter/getter functions of individual items in internal node collections.
 (defmacro build-bplustree-node-collection-accesors (column)
   "Generates the getter/setter functions for the btreeplus-node internal collections, keys and records."
   (let* ((package (symbol-package column))
@@ -34,6 +32,16 @@
     `(progn
        (defun ,getter (node i) (aref (,base-collection node) i))
        (defun ,setter (node i value) (setf (aref (,base-collection node) i) value)))))
+
+(defmacro build-bplustree-node-collection-transfer (column)
+  "Generates functions to transfer elements from a node into another node."
+  (let* ((package (symbol-package column))
+         (getter (intern (concatenate 'string (string 'bplustree-node-) (string column)) package))
+         (setter (intern (concatenate 'string (string getter) (string '-set)) package))
+         (fname (intern (concatenate 'string (string getter) (string '-transfer)) package)))
+    `(defun ,fname (source destination i-source i-destination &key set-source-nil)
+       (,setter destination i-destination (,getter source i-source))
+       (when set-source-nil (,setter source i-source nil)))))
 
 ; Build setter functions, analogous to the getters already provided by defstruct.
 (build-bplustree-node-setter kind)
@@ -45,6 +53,10 @@
 ; Build specialized functions to access the key and record internal collections.
 (build-bplustree-node-collection-accesors key)
 (build-bplustree-node-collection-accesors record)
+
+; Build specialized functions to transfer keys and records between nodes.
+(build-bplustree-node-collection-transfer key)
+(build-bplustree-node-collection-transfer record)
 
 (defun bplustree-node-internal-p (node)
   "Is the node an internal node?"
