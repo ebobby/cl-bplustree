@@ -146,7 +146,8 @@
      for i from max downto index
      for j = (1- i) while (> i 0)
      do
-       (bplustree-node-key-record-set node i (bplustree-node-key node j) (bplustree-node-record node j))
+       (bplustree-node-key-transfer node node j i)
+       (bplustree-node-record-transfer node node j i)
      finally
        (bplustree-node-key-record-set node index nil nil)))
 
@@ -158,7 +159,8 @@
      for i from index to size
      for j = (1+ i) while (<= j max)
      do
-       (bplustree-node-key-record-set node i (bplustree-node-key node j) (bplustree-node-record node j))))
+       (bplustree-node-key-transfer node node j i)
+       (bplustree-node-record-transfer node node j i)))
 
 (defun split-node (node)
   "Creates a new node and copies the upper half of the key/records in node,
@@ -170,10 +172,9 @@
      with node-adjust = (if (bplustree-node-internal-p node) -1 0)
      for i from mid to size
      for j = 0 then (1+ j) do
-       (bplustree-node-key-record-set new j (bplustree-node-key node (+ i node-adjust)) (bplustree-node-record node i))
+       (bplustree-node-key-transfer node new (+ i node-adjust) j :set-source-nil t)
+       (bplustree-node-record-transfer node new i j :set-source-nil t)
        (bplustree-node-size-inc new)
-       (bplustree-node-key-set node (+ i node-adjust) nil)
-       (bplustree-node-record-set node i nil)
        (bplustree-node-size-dec node)
      finally
        (when (bplustree-node-leaf-p node)
@@ -190,7 +191,7 @@
         key
         (loop
            for i from 0 to (1- num-keys)
-           do (bplustree-node-key-set node i (bplustree-node-key node (1+ i)))
+           do (bplustree-node-key-transfer node node (1+ i) i)
            finally
              (bplustree-node-key-set node num-keys nil)
              (return key)))))
@@ -234,7 +235,8 @@
              (let* ((new-key (promote-first-key new-node))
                     (index (search-node-keys node new-key)))
                (move-records-right node index)
-               (bplustree-node-key-record-set node index new-key (bplustree-node-record node (1+ index)))
+               (bplustree-node-key-set node index new-key)
+               (bplustree-node-record-transfer node node (1+ index) index)
                (bplustree-node-record-set node (1+ index) new-node)
                (bplustree-node-size-inc node)))
            (build-new-root (old-root new-node)
