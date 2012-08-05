@@ -23,9 +23,7 @@
    if every element insterted is searchable."
   (multiple-value-bind (tree items) (build-test-tree order n)
     (loop
-       for i in items
-       for key = (car i)
-       for record = (cadr i)
+       for (key record) in items
        do (format t "Searching key ~a : " key)
          (if (string= (bplustree-search key tree) record)
              (format t "found.~%")
