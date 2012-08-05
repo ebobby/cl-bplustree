@@ -134,8 +134,7 @@
      for i from max downto index
      for j = (1- i) while (> i 0)
      do
-       (bplustree-node-key-set node i (bplustree-node-key node j))
-       (bplustree-node-record-set node i (bplustree-node-record node j))
+       (bplustree-node-key-record-set node i (bplustree-node-key node j) (bplustree-node-record node j))
      finally
        (bplustree-node-key-record-set node index nil nil)))
 
@@ -147,8 +146,7 @@
      for i from index to size
      for j = (1+ i) while (<= j max)
      do
-       (bplustree-node-key-set node i (bplustree-node-key node j))
-       (bplustree-node-record-set node i (bplustree-node-record node j))))
+       (bplustree-node-key-record-set node i (bplustree-node-key node j) (bplustree-node-record node j))))
 
 (defun split-node (node)
   "Creates a new node and copies the upper half of the key/records in node,
