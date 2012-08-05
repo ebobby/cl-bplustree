@@ -15,7 +15,6 @@
   records
   next-node)
 
-; Builder of getter functions based on the setters given by the node struct.
 (defmacro build-bplustree-node-setter (column)
   "Generates the setter functions for the btreeplus-node structure."
   (let* ((package (symbol-package column))
@@ -24,7 +23,6 @@
     `(defun ,setter (node value)
        (setf (,struct-getter node) value))))
 
-; Builder of getter/getter functions of individual items in internal node collections.
 (defmacro build-bplustree-node-collection-accesors (column)
   "Generates the getter/setter functions for the btreeplus-node internal collections, keys and records."
   (let* ((package (symbol-package column))
@@ -34,6 +32,16 @@
     `(progn
        (defun ,getter (node i) (aref (,base-collection node) i))
        (defun ,setter (node i value) (setf (aref (,base-collection node) i) value)))))
+
+(defmacro build-bplustree-node-collection-transfer (column)
+  "Generates functions to transfer elements from a node into another node."
+  (let* ((package (symbol-package column))
+         (getter (intern (concatenate 'string (string 'bplustree-node-) (string column)) package))
+         (setter (intern (concatenate 'string (string getter) (string '-set)) package))
+         (fname (intern (concatenate 'string (string getter) (string '-transfer)) package)))
+    `(defun ,fname (source destination i-source i-destination &key set-source-nil)
+       (,setter destination i-destination (,getter source i-source))
+       (when set-source-nil (,setter source i-source nil)))))
 
 ; Build setter functions, analogous to the getters already provided by defstruct.
 (build-bplustree-node-setter kind)
@@ -45,6 +53,10 @@
 ; Build specialized functions to access the key and record internal collections.
 (build-bplustree-node-collection-accesors key)
 (build-bplustree-node-collection-accesors record)
+
+; Build specialized functions to transfer keys and records between nodes.
+(build-bplustree-node-collection-transfer key)
+(build-bplustree-node-collection-transfer record)
 
 (defun bplustree-node-internal-p (node)
   "Is the node an internal node?"
@@ -134,7 +146,8 @@
      for i from max downto index
      for j = (1- i) while (> i 0)
      do
-       (bplustree-node-key-record-set node i (bplustree-node-key node j) (bplustree-node-record node j))
+       (bplustree-node-key-transfer node node j i)
+       (bplustree-node-record-transfer node node j i)
      finally
        (bplustree-node-key-record-set node index nil nil)))
 
@@ -146,7 +159,8 @@
      for i from index to size
      for j = (1+ i) while (<= j max)
      do
-       (bplustree-node-key-record-set node i (bplustree-node-key node j) (bplustree-node-record node j))))
+       (bplustree-node-key-transfer node node j i)
+       (bplustree-node-record-transfer node node j i)))
 
 (defun split-node (node)
   "Creates a new node and copies the upper half of the key/records in node,
@@ -158,10 +172,9 @@
      with node-adjust = (if (bplustree-node-internal-p node) -1 0)
      for i from mid to size
      for j = 0 then (1+ j) do
-       (bplustree-node-key-record-set new j (bplustree-node-key node (+ i node-adjust)) (bplustree-node-record node i))
+       (bplustree-node-key-transfer node new (+ i node-adjust) j :set-source-nil t)
+       (bplustree-node-record-transfer node new i j :set-source-nil t)
        (bplustree-node-size-inc new)
-       (bplustree-node-key-set node (+ i node-adjust) nil)
-       (bplustree-node-record-set node i nil)
        (bplustree-node-size-dec node)
      finally
        (when (bplustree-node-leaf-p node)
@@ -178,7 +191,7 @@
         key
         (loop
            for i from 0 to (1- num-keys)
-           do (bplustree-node-key-set node i (bplustree-node-key node (1+ i)))
+           do (bplustree-node-key-transfer node node (1+ i) i)
            finally
              (bplustree-node-key-set node num-keys nil)
              (return key)))))
@@ -222,7 +235,8 @@
              (let* ((new-key (promote-first-key new-node))
                     (index (search-node-keys node new-key)))
                (move-records-right node index)
-               (bplustree-node-key-record-set node index new-key (bplustree-node-record node (1+ index)))
+               (bplustree-node-key-set node index new-key)
+               (bplustree-node-record-transfer node node (1+ index) index)
                (bplustree-node-record-set node (1+ index) new-node)
                (bplustree-node-size-inc node)))
            (build-new-root (old-root new-node)
