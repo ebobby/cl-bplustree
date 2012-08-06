@@ -159,26 +159,6 @@
        (bplustree-node-key-transfer node node j i)
        (bplustree-node-record-transfer node node j i)))
 
-(defun split-node (node)
-  "Creates a new node and copies the upper half of the key/records in node,
-   returning the new node."
-  (loop
-     with new = (make-node (bplustree-node-order node) (bplustree-node-kind node))
-     with mid = (bplustree-node-min-size node)
-     with size = (1- (bplustree-node-size node))
-     with node-adjust = (if (bplustree-node-internal-p node) -1 0)
-     for i from mid to size
-     for j = 0 then (1+ j) do
-       (bplustree-node-key-transfer node new (+ i node-adjust) j :set-source-nil t)
-       (bplustree-node-record-transfer node new i j :set-source-nil t)
-       (bplustree-node-size-inc new)
-       (bplustree-node-size-dec node)
-     finally
-       (when (bplustree-node-leaf-p node)
-         (bplustree-node-next-node-set new (bplustree-node-next-node node))
-         (bplustree-node-next-node-set node new))
-       (return new)))
-
 (defun promote-first-key (node &key no-shift)
   "Promotes the first key in the node, if its a leaf it simply returns it, if its an internal
    node it returns it but shifts the other keys to the left."
@@ -243,6 +223,23 @@
                (bplustree-node-record-set new-root 1 new-node)
                (bplustree-node-size-set new-root 2)
                new-root))
+           (split-node (node)
+             (loop
+                with new = (make-node (bplustree-node-order node) (bplustree-node-kind node))
+                with mid = (bplustree-node-min-size node)
+                with size = (1- (bplustree-node-size node))
+                with node-adjust = (if (bplustree-node-internal-p node) -1 0)
+                for i from mid to size
+                for j = 0 then (1+ j) do
+                  (bplustree-node-key-transfer node new (+ i node-adjust) j :set-source-nil t)
+                  (bplustree-node-record-transfer node new i j :set-source-nil t)
+                  (bplustree-node-size-inc new)
+                  (bplustree-node-size-dec node)
+                finally
+                  (when (bplustree-node-leaf-p node)
+                    (bplustree-node-next-node-set new (bplustree-node-next-node node))
+                    (bplustree-node-next-node-set node new))
+                  (return new)))
            (insert-helper (node key record)
              (if (bplustree-node-internal-p node)
                  (let ((new-node (insert-helper (find-node node key) key record))) ; Traverse down the tree.
