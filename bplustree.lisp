@@ -330,7 +330,7 @@
                  (let ((index (search-node-keys node key :record-search t)))
                    (when index
                      (move-records-left node index)
-                     (bplustree-node-size-set node (1- (bplustree-node-size node))))))))
+                     (bplustree-node-size-dec node))))))
     (delete-helper key tree)
     (if (and (= (bplustree-node-size tree) 1) (bplustree-node-internal-p tree))
         (bplustree-node-record tree 0)      ; Tree losses a level.
