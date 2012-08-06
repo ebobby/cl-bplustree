@@ -10,7 +10,6 @@
   kind
   order
   size
-  depth
   keys
   records
   next-node)
@@ -47,7 +46,6 @@
 (build-bplustree-node-setter kind)
 (build-bplustree-node-setter order)
 (build-bplustree-node-setter size)
-(build-bplustree-node-setter depth)
 (build-bplustree-node-setter next-node)
 
 ; Build specialized functions to access the key and record internal collections.
@@ -98,12 +96,11 @@
 
 ;;; Internal tree operations
 
-(defun make-node (order &optional (kind :internal) (depth 1))
+(defun make-node (order &optional (kind :internal))
   "Makes an empty B+ tree node with the given order and the optional type (:leaf or :internal)."
   (make-bplustree-node
    :order order
    :size 0
-   :depth depth
    :kind kind
    :keys (make-array (1+ order) :initial-element nil)
    :records (make-array (1+ order) :initial-element nil)
@@ -166,7 +163,7 @@
   "Creates a new node and copies the upper half of the key/records in node,
    returning the new node."
   (loop
-     with new = (make-node (bplustree-node-order node) (bplustree-node-kind node) (bplustree-node-depth node))
+     with new = (make-node (bplustree-node-order node) (bplustree-node-kind node))
      with mid = (bplustree-node-min-size node)
      with size = (1- (bplustree-node-size node))
      with node-adjust = (if (bplustree-node-internal-p node) -1 0)
@@ -245,7 +242,6 @@
                (bplustree-node-record-set new-root 0 old-root)
                (bplustree-node-record-set new-root 1 new-node)
                (bplustree-node-size-set new-root 2)
-               (bplustree-node-depth-set new-root (1+ (bplustree-node-depth old-root)))
                new-root))
            (insert-helper (node key record)
              (if (bplustree-node-internal-p node)
@@ -272,54 +268,70 @@
      do (setf tree (bplustree-insert key record tree))
      finally (return tree)))
 
-;; Sketch code
-
-(defun balance-node (node index)
-  (cond ((and (plusp index)     ; Transfer record from the left side node.
-              (> (bplustree-node-size (bplustree-node-record node (1- index)))
-                 (bplustree-node-min-size (bplustree-node-record node (1- index)))))
-         (let* ((l-node (bplustree-node-record node (1- index)))
-                (r-node (bplustree-node-record node index))
-                (l-node-key-i (1- (bplustree-node-num-keys l-node)))
-                (l-node-record-i (1- (bplustree-node-size l-node))))
-           (move-records-right r-node 0)
-           (bplustree-node-key-transfer l-node r-node l-node-key-i 0 :set-source-nil t)
-           (bplustree-node-record-transfer l-node r-node l-node-record-i 0 :set-source-nil t)
-           (when (bplustree-node-internal-p r-node)
-             (bplustree-node-key-set r-node 0 (promote-first-key (bplustree-node-record r-node 1) :no-shift t)))
-           (bplustree-node-key-set node (1- index) (promote-first-key r-node :no-shift t))
-           (bplustree-node-size-dec l-node)
-           (bplustree-node-size-inc r-node)))
-        ((and (< index (1- (bplustree-node-size node))) ; Transfer record from the right side node.
-              (> (bplustree-node-size (bplustree-node-record node (1+ index)))
-                 (bplustree-node-min-size (bplustree-node-record node (1+ index)))))
-         (let* ((l-node (bplustree-node-record node index))
-                (r-node (bplustree-node-record node (1+ index)))
-                (l-node-key-i (bplustree-node-num-keys l-node))
-                (l-node-record-i (bplustree-node-size l-node)))
-           (bplustree-node-key-transfer r-node l-node 0 l-node-key-i)
-           (bplustree-node-record-transfer r-node l-node 0 l-node-record-i)
-           (move-records-left r-node 0)
-           (when (bplustree-node-internal-p l-node)
-             (bplustree-node-key-set l-node l-node-key-i (promote-first-key (bplustree-node-record l-node l-node-record-i) :no-shift t)))
-           (bplustree-node-key-set node index (promote-first-key r-node :no-shift t))
-           (bplustree-node-size-inc l-node)
-           (bplustree-node-size-dec r-node)))
-        (t nil)))
-
 (defun bplustree-delete (key tree)
-  (labels ((delete-helper (key node)
+  "Deletes a record from the given tree using the given key.
+   Returns the tree with the record deleted. This call destroys the given tree."
+  (labels ((balance-node (node index)
+             (cond ((and (plusp index)     ; Transfer record from the left side node.
+                         (> (bplustree-node-size (bplustree-node-record node (1- index)))
+                            (bplustree-node-min-size (bplustree-node-record node (1- index)))))
+                    (let* ((l-node (bplustree-node-record node (1- index)))
+                           (r-node (bplustree-node-record node index))
+                           (l-node-key-i (1- (bplustree-node-num-keys l-node)))
+                           (l-node-record-i (1- (bplustree-node-size l-node))))
+                      (move-records-right r-node 0)
+                      (bplustree-node-key-transfer l-node r-node l-node-key-i 0 :set-source-nil t)
+                      (bplustree-node-record-transfer l-node r-node l-node-record-i 0 :set-source-nil t)
+                      (when (bplustree-node-internal-p r-node)
+                        (bplustree-node-key-set r-node 0 (promote-first-key (bplustree-node-record r-node 1) :no-shift t)))
+                      (bplustree-node-key-set node (1- index) (promote-first-key r-node :no-shift t))
+                      (bplustree-node-size-dec l-node)
+                      (bplustree-node-size-inc r-node)))
+                   ((and (< index (1- (bplustree-node-size node))) ; Transfer record from the right side node.
+                         (> (bplustree-node-size (bplustree-node-record node (1+ index)))
+                            (bplustree-node-min-size (bplustree-node-record node (1+ index)))))
+                    (let* ((l-node (bplustree-node-record node index))
+                           (r-node (bplustree-node-record node (1+ index)))
+                           (l-node-key-i (bplustree-node-num-keys l-node))
+                           (l-node-record-i (bplustree-node-size l-node)))
+                      (bplustree-node-key-transfer r-node l-node 0 l-node-key-i)
+                      (bplustree-node-record-transfer r-node l-node 0 l-node-record-i)
+                      (move-records-left r-node 0)
+                      (when (bplustree-node-internal-p l-node)
+                        (bplustree-node-key-set l-node l-node-key-i (promote-first-key (bplustree-node-record l-node l-node-record-i) :no-shift t)))
+                      (bplustree-node-key-set node index (promote-first-key r-node :no-shift t))
+                      (bplustree-node-size-inc l-node)
+                      (bplustree-node-size-dec r-node)))
+                   (t nil)))
+           (merge-node (node index)
+             (loop
+                with l-node = (bplustree-node-record node (- index (if (plusp index) 1 0)))
+                with r-node = (bplustree-node-record node (+ index (if (plusp index) 0 1)))
+                with l-size = (bplustree-node-size l-node)
+                with r-size = (bplustree-node-size r-node)
+                for j from 0 below r-size
+                for i = l-size then (1+ i)
+                do
+                  (bplustree-node-key-transfer r-node l-node j i)
+                  (bplustree-node-record-transfer r-node l-node j i)
+                  (bplustree-node-size-inc l-node)
+                finally
+                  (move-records-left node (if (zerop index) 1 index))
+                  (bplustree-node-next-node-set l-node (bplustree-node-next-node r-node))
+                  (bplustree-node-size-dec node)))
+           (delete-helper (key node)
              (if (bplustree-node-internal-p node)
                  (let* ((index (search-node-keys node key))
                         (child-node (bplustree-node-record node index)))
                    (delete-helper key child-node)
                    (when (bplustree-node-underflow-p child-node)
-                     (if (balance-node node index)
-                         (princ "Balanced")
-                         (princ "Not balanced"))))
-                 (let ((index (search-node-keys node key :record-search t))) ; Simple leaf delete.
+                     (unless (balance-node node index)
+                       (merge-node node index))))
+                 (let ((index (search-node-keys node key :record-search t)))
                    (when index
                      (move-records-left node index)
                      (bplustree-node-size-set node (1- (bplustree-node-size node))))))))
     (delete-helper key tree)
-    tree))
+    (if (and (= (bplustree-node-size tree) 1) (bplustree-node-internal-p tree))
+        (bplustree-node-record tree 0)      ; Tree losses a level.
+        tree)))

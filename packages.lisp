@@ -10,4 +10,5 @@
    :bplustree-search
    :bplustree-search-range
    :bplustree-insert
-   :bplustree-insert-many))
+   :bplustree-insert-many
+   :bplustree-delete))
