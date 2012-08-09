@@ -5,7 +5,6 @@
 
 ;;; General access functions
 
-; Our node type.
 (defstruct bplustree-node
   kind
   order
@@ -60,10 +59,6 @@
   "Is the node an internal node?"
   (eq :internal (bplustree-node-kind node)))
 
-(defun bplustree-node-leaf-p (node)
-  "Is the node a leaf?"
-  (eq :leaf (bplustree-node-kind node)))
-
 (defun bplustree-node-overflow-p (node)
   "Does the node have more records than it should?"
    (> (bplustree-node-size node) (bplustree-node-order node)))
@@ -93,8 +88,6 @@
 (defun bplustree-node-size-dec (node)
   "Decrements the node size by one."
   (bplustree-node-size-set node (1- (bplustree-node-size node))))
-
-;;; Internal tree operations
 
 (defun make-node (order &optional (kind :internal))
   "Makes an empty B+ tree node with the given order and the optional type (:leaf or :internal)."
@@ -164,7 +157,7 @@
    node it returns it but shifts the other keys to the left."
   (let ((key (bplustree-node-key node 0))
         (num-keys (bplustree-node-num-keys node)))
-    (if (or (bplustree-node-leaf-p node) no-shift)
+    (if (or (not (bplustree-node-internal-p node)) no-shift)
         key
         (loop
            for i from 0 below num-keys
@@ -236,7 +229,7 @@
                   (bplustree-node-size-inc new)
                   (bplustree-node-size-dec node)
                 finally
-                  (when (bplustree-node-leaf-p node)
+                  (unless (bplustree-node-internal-p node)
                     (bplustree-node-next-node-set new (bplustree-node-next-node node))
                     (bplustree-node-next-node-set node new))
                   (return new)))
