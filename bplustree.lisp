@@ -132,25 +132,20 @@
 (defun move-records-right (node index)
   "Move the keys and records from the given starting point to the right."
   (loop
-     with max = (bplustree-node-size node)
-     for i from max downto index
-     for j = (1- i) while (> i 0)
+     for i from (bplustree-node-size node) downto index while (> i 0)
      do
-       (bplustree-node-key-transfer node node j i)
-       (bplustree-node-record-transfer node node j i)
+       (bplustree-node-key-transfer node node (1- i) i)
+       (bplustree-node-record-transfer node node (1- i) i)
      finally
        (bplustree-node-key-record-set node index nil nil)))
 
 (defun move-records-left (node index)
   "Move the keys and records going left to right from given starting point."
   (loop
-     with size = (bplustree-node-size node)
-     with max = (bplustree-node-order node)
-     for i from index to size
-     for j = (1+ i) while (<= j max)
+     for i from index to (bplustree-node-size node) while (<= (1+ i) (bplustree-node-order node))
      do
-       (bplustree-node-key-transfer node node j i)
-       (bplustree-node-record-transfer node node j i)))
+       (bplustree-node-key-transfer node node (1+ i) i)
+       (bplustree-node-record-transfer node node (1+ i) i)))
 
 (defun promote-first-key (node &key no-shift)
   "Promotes the first key in the node, if its a leaf it simply returns it, if its an internal
@@ -219,10 +214,8 @@
            (split-node (node)
              (loop
                 with new = (make-node (bplustree-node-order node) (bplustree-node-kind node))
-                with mid = (bplustree-node-min-size node)
-                with size = (1- (bplustree-node-size node))
                 with node-adjust = (if (bplustree-node-internal-p node) -1 0)
-                for i from mid to size
+                for i from (bplustree-node-min-size node) below (bplustree-node-size node)
                 for j = 0 then (1+ j) do
                   (bplustree-node-key-transfer node new (+ i node-adjust) j :set-source-nil t)
                   (bplustree-node-record-transfer node new i j :set-source-nil t)
@@ -297,10 +290,8 @@
              (loop
                 with l-node = (bplustree-node-record node (- index (if (plusp index) 1 0)))
                 with r-node = (bplustree-node-record node (+ index (if (plusp index) 0 1)))
-                with l-size = (bplustree-node-size l-node)
-                with r-size = (bplustree-node-size r-node)
-                for j from 0 below r-size
-                for i = l-size then (1+ i)
+                for j from 0 below (bplustree-node-size r-node)
+                for i = (bplustree-node-size l-node) then (1+ i)
                 do
                   (bplustree-node-key-transfer r-node l-node j i)
                   (bplustree-node-record-transfer r-node l-node j i)
