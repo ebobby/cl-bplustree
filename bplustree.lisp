@@ -142,7 +142,7 @@
 (defun move-records-left (node index)
   "Move the keys and records going left to right from given starting point."
   (loop
-     for i from index to (bplustree-node-size node) while (<= (1+ i) (bplustree-node-order node))
+     for i from index to (bplustree-node-size node)
      do
        (bplustree-node-key-transfer node node (1+ i) i)
        (bplustree-node-record-transfer node node (1+ i) i)))
