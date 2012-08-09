@@ -167,7 +167,7 @@
     (if (or (bplustree-node-leaf-p node) no-shift)
         key
         (loop
-           for i from 0 to (1- num-keys)
+           for i from 0 below num-keys
            do (bplustree-node-key-transfer node node (1+ i) i)
            finally
              (bplustree-node-key-set node num-keys nil)
@@ -191,7 +191,7 @@
      until (null current-node)
      appending
        (loop
-          for i from initial-index to (1- (bplustree-node-num-keys current-node))
+          for i from initial-index below (bplustree-node-num-keys current-node)
           for key = (bplustree-node-key current-node i)
           for record = (bplustree-node-record current-node i)
           while (<= key to)
@@ -205,7 +205,7 @@
    Returns the tree with the new record inserted. This call destroys the given tree."
   (labels ((add-record (node key record)
              (let ((index (search-node-keys node key)))
-               (move-records-right node (search-node-keys node key))
+               (move-records-right node index)
                (bplustree-node-key-record-set node index key record)
                (bplustree-node-size-inc node)))
            (add-key (node new-node)
