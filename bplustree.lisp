@@ -135,14 +135,12 @@
      for i from (bplustree-node-size node) downto index while (> i 0)
      do
        (bplustree-node-key-transfer node node (1- i) i)
-       (bplustree-node-record-transfer node node (1- i) i)
-     finally
-       (bplustree-node-key-record-set node index nil nil)))
+       (bplustree-node-record-transfer node node (1- i) i)))
 
 (defun move-records-left (node index)
   "Move the keys and records going left to right from given starting point."
   (loop
-     for i from index to (bplustree-node-size node)
+     for i from index below (bplustree-node-size node)
      do
        (bplustree-node-key-transfer node node (1+ i) i)
        (bplustree-node-record-transfer node node (1+ i) i)))
