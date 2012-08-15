@@ -5,28 +5,28 @@
 
 ;;; General access functions
 
-(defclass bplustree-node ()
-  ((kind :accessor node-kind :initarg :kind)
-   (order :accessor node-order :initarg :order)
-   (size :accessor node-size :initarg :size)
-   (keys :accessor node-keys :initarg :keys)
-   (records :accessor node-records :initarg :records)
-   (next-node :accessor node-next-node :initarg :next-node)))
+(defstruct bplustree-node
+  kind
+  order
+  size
+  keys
+  records
+  next-node)
 
-(defmacro build-node-collection-accesors (column)
+(defmacro build-bplustree-node-collection-accesors (column)
   "Generates the getter/setter functions for the btreeplus-node internal collections, keys and records."
   (let* ((package (symbol-package column))
-         (getter (intern (concatenate 'string (string 'node-) (string column)) package))
+         (getter (intern (concatenate 'string (string 'bplustree-node-) (string column)) package))
          (setter (intern (concatenate 'string (string getter) (string '-set)) package))
          (base-collection (intern (concatenate 'string (string getter) (string 's)) (symbol-package column))))
     `(progn
        (defun ,getter (node i) (aref (,base-collection node) i))
        (defun ,setter (node i value) (setf (aref (,base-collection node) i) value)))))
 
-(defmacro build-node-collection-transfer (column)
+(defmacro build-bplustree-node-collection-transfer (column)
   "Generates functions to transfer elements from a node into another node."
   (let* ((package (symbol-package column))
-         (getter (intern (concatenate 'string (string 'node-) (string column)) package))
+         (getter (intern (concatenate 'string (string 'bplustree-node-) (string column)) package))
          (setter (intern (concatenate 'string (string getter) (string '-set)) package))
          (fname (intern (concatenate 'string (string getter) (string '-transfer)) package)))
     `(defun ,fname (source destination i-source i-destination &key set-source-nil)
@@ -34,48 +34,48 @@
        (when set-source-nil (,setter source i-source nil)))))
 
 ; Build specialized functions to access the key and record internal collections.
-(build-node-collection-accesors key)
-(build-node-collection-accesors record)
+(build-bplustree-node-collection-accesors key)
+(build-bplustree-node-collection-accesors record)
 
 ; Build specialized functions to transfer keys and records between nodes.
-(build-node-collection-transfer key)
-(build-node-collection-transfer record)
+(build-bplustree-node-collection-transfer key)
+(build-bplustree-node-collection-transfer record)
 
-(defun node-internal-p (node)
+(defun bplustree-node-internal-p (node)
   "Is the node an internal node?"
-  (eq :internal (node-kind node)))
+  (eq :internal (bplustree-node-kind node)))
 
-(defun node-overflow-p (node)
+(defun bplustree-node-overflow-p (node)
   "Does the node have more records than it should?"
-   (> (node-size node) (node-order node)))
+   (> (bplustree-node-size node) (bplustree-node-order node)))
 
-(defun node-underflow-p (node)
+(defun bplustree-node-underflow-p (node)
   "Does the node have less records than it should?"
-  (< (node-size node) (node-min-size node)))
+  (< (bplustree-node-size node) (bplustree-node-min-size node)))
 
-(defun node-key-record-set (node n key record)
+(defun bplustree-node-key-record-set (node n key record)
   "Sets both the key and record at the given index  to the given B+ node."
-  (node-key-set node n key)
-  (node-record-set node n record))
+  (bplustree-node-key-set node n key)
+  (bplustree-node-record-set node n record))
 
-(defun node-num-keys (node)
+(defun bplustree-node-num-keys (node)
   "Get the number of keys based on the node size and node type."
-  (- (node-size node)
-     (if (node-internal-p node) 1 0)))
+  (- (bplustree-node-size node)
+     (if (bplustree-node-internal-p node) 1 0)))
 
-(defun node-min-size (node)
+(defun bplustree-node-min-size (node)
   "Returns the minimum size a node can have (except root)."
-  (ceiling (/ (node-order node) 2)))
+  (ceiling (/ (bplustree-node-order node) 2)))
 
 (defun make-node (order &optional (kind :internal))
   "Makes an empty B+ tree node with the given order and the optional type (:leaf or :internal)."
-  (make-instance 'bplustree-node
-                 :order order
-                 :size 0
-                 :kind kind
-                 :keys (make-array (1+ order) :initial-element nil)
-                 :records (make-array (1+ order) :initial-element nil)
-                 :next-node nil))
+  (make-bplustree-node
+   :order order
+   :size 0
+   :kind kind
+   :keys (make-array (1+ order) :initial-element nil)
+   :records (make-array (1+ order) :initial-element nil)
+   :next-node nil))
 
 (defun search-node-keys (node key &key record-search)
   "Search the given node keys vector using binary search.
@@ -85,56 +85,56 @@
              (if (< max min)
                  (unless record-search (1+ max))
                  (let* ((mid (+ min (ash (- max min) -1)))
-                        (k (node-key node mid)))
+                        (k (bplustree-node-key node mid)))
                    (cond ((< key k) (binary-search min (1- mid)))
                          ((> key k) (binary-search (1+ mid) max))
                          (t (+ mid (if record-search 0 1))))))))
-    (binary-search 0 (1- (node-num-keys node)))))
+    (binary-search 0 (1- (bplustree-node-num-keys node)))))
 
 (defun find-record (node key)
   "Get the record with the given key in the given node, nil if none."
   (let ((index (search-node-keys node key :record-search t)))
     (unless (null index)
-      (node-record node index))))
+      (bplustree-node-record node index))))
 
 (defun find-node (node key)
   "Get the next node using the given key in the given node."
-  (node-record node (search-node-keys node key)))
+  (bplustree-node-record node (search-node-keys node key)))
 
 (defun find-leaf-node (node key)
   "Find the proper leaf node for the given key."
-  (if (node-internal-p node)
+  (if (bplustree-node-internal-p node)
       (find-leaf-node (find-node node key) key)
       node))
 
 (defun move-records-right (node index)
   "Move the keys and records from the given starting point to the right."
   (loop
-     for i from (node-size node) downto index while (> i 0)
+     for i from (bplustree-node-size node) downto index while (> i 0)
      do
-       (node-key-transfer node node (1- i) i)
-       (node-record-transfer node node (1- i) i)))
+       (bplustree-node-key-transfer node node (1- i) i)
+       (bplustree-node-record-transfer node node (1- i) i)))
 
 (defun move-records-left (node index)
   "Move the keys and records going left to right from given starting point."
   (loop
-     for i from index below (node-size node)
+     for i from index below (bplustree-node-size node)
      do
-       (node-key-transfer node node (1+ i) i)
-       (node-record-transfer node node (1+ i) i)))
+       (bplustree-node-key-transfer node node (1+ i) i)
+       (bplustree-node-record-transfer node node (1+ i) i)))
 
 (defun promote-first-key (node &key no-shift)
   "Promotes the first key in the node, if its a leaf it simply returns it, if its an internal
    node it returns it but shifts the other keys to the left."
-  (let ((key (node-key node 0))
-        (num-keys (node-num-keys node)))
-    (if (or (not (node-internal-p node)) no-shift)
+  (let ((key (bplustree-node-key node 0))
+        (num-keys (bplustree-node-num-keys node)))
+    (if (or (not (bplustree-node-internal-p node)) no-shift)
         key
         (loop
            for i from 0 below num-keys
-           do (node-key-transfer node node (1+ i) i)
+           do (bplustree-node-key-transfer node node (1+ i) i)
            finally
-             (node-key-set node num-keys nil)
+             (bplustree-node-key-set node num-keys nil)
              (return key)))))
 
 ;;; Public interface
@@ -155,13 +155,13 @@
      until (null current-node)
      appending
        (loop
-          for i from initial-index below (node-num-keys current-node)
-          for key = (node-key current-node i)
-          for record = (node-record current-node i)
+          for i from initial-index below (bplustree-node-num-keys current-node)
+          for key = (bplustree-node-key current-node i)
+          for record = (bplustree-node-record current-node i)
           while (<= key to)
           collect (list key record)
           finally
-            (setf current-node (node-next-node current-node))
+            (setf current-node (bplustree-node-next-node current-node))
             (setf initial-index 0))))
 
 (defun bplustree-insert (key record tree)
@@ -170,49 +170,49 @@
   (labels ((add-record (node key record)
              (let ((index (search-node-keys node key)))
                (move-records-right node index)
-               (node-key-record-set node index key record)
-               (incf (node-size node))))
+               (bplustree-node-key-record-set node index key record)
+               (incf (bplustree-node-size node))))
            (add-key (node new-node)
              (let* ((new-key (promote-first-key new-node))
                     (index (search-node-keys node new-key)))
                (move-records-right node index)
-               (node-key-set node index new-key)
-               (node-record-transfer node node (1+ index) index)
-               (node-record-set node (1+ index) new-node)
-               (incf (node-size node))))
+               (bplustree-node-key-set node index new-key)
+               (bplustree-node-record-transfer node node (1+ index) index)
+               (bplustree-node-record-set node (1+ index) new-node)
+               (incf (bplustree-node-size node))))
            (build-new-root (old-root new-node)
-             (let ((new-root (make-node (node-order old-root))))
-               (node-key-set new-root 0 (promote-first-key new-node))
-               (node-record-set new-root 0 old-root)
-               (node-record-set new-root 1 new-node)
-               (setf (node-size new-root) 2)
+             (let ((new-root (make-node (bplustree-node-order old-root))))
+               (bplustree-node-key-set new-root 0 (promote-first-key new-node))
+               (bplustree-node-record-set new-root 0 old-root)
+               (bplustree-node-record-set new-root 1 new-node)
+               (setf (bplustree-node-size new-root) 2)
                new-root))
            (split-node (node)
              (loop
-                with new = (make-node (node-order node) (node-kind node))
-                with node-adjust = (if (node-internal-p node) -1 0)
-                for i from (node-min-size node) below (node-size node)
+                with new = (make-node (bplustree-node-order node) (bplustree-node-kind node))
+                with node-adjust = (if (bplustree-node-internal-p node) -1 0)
+                for i from (bplustree-node-min-size node) below (bplustree-node-size node)
                 for j = 0 then (1+ j) do
-                  (node-key-transfer node new (+ i node-adjust) j :set-source-nil t)
-                  (node-record-transfer node new i j :set-source-nil t)
-                  (incf (node-size new))
-                  (decf (node-size node))
+                  (bplustree-node-key-transfer node new (+ i node-adjust) j :set-source-nil t)
+                  (bplustree-node-record-transfer node new i j :set-source-nil t)
+                  (incf (bplustree-node-size new))
+                  (decf (bplustree-node-size node))
                 finally
-                  (unless (node-internal-p node)
-                    (setf (node-next-node new) (node-next-node node))
-                    (setf (node-next-node node) new))
+                  (unless (bplustree-node-internal-p node)
+                    (setf (bplustree-node-next-node new) (bplustree-node-next-node node))
+                    (setf (bplustree-node-next-node node) new))
                   (return new)))
            (insert-helper (node key record)
-             (if (node-internal-p node)
+             (if (bplustree-node-internal-p node)
                  (let ((new-node (insert-helper (find-node node key) key record))) ; Traverse down the tree.
                    (when new-node                                                  ; Did we have a split?
                      (add-key node new-node)                                       ; Insert new node into its parent.
-                     (when (node-overflow-p node)                        ; Is this node larger than it should?
+                     (when (bplustree-node-overflow-p node)                        ; Is this node larger than it should?
                        (split-node node))))                                        ; Split it.
                  (let ((update (search-node-keys node key :record-search t)))      ; Is this an update?
-                   (cond (update (node-key-record-set node update key record) nil)
+                   (cond (update (bplustree-node-key-record-set node update key record) nil)
                          (t (add-record node key record)                           ; Add record.
-                            (when (node-overflow-p node)                 ; Illegal leaf?
+                            (when (bplustree-node-overflow-p node)                 ; Illegal leaf?
                               (split-node node))))))))                             ; Split it and return new node.
     (let ((new-node (insert-helper tree key record)))
       (if new-node
@@ -232,63 +232,63 @@
    Returns the tree with the record deleted. This call destroys the given tree."
   (labels ((balance-node (node index)
              (cond ((and (plusp index)     ; Transfer record from the left side node.
-                         (> (node-size (node-record node (1- index)))
-                            (node-min-size (node-record node (1- index)))))
-                    (let* ((l-node (node-record node (1- index)))
-                           (r-node (node-record node index))
-                           (l-node-key-i (1- (node-num-keys l-node)))
-                           (l-node-record-i (1- (node-size l-node))))
+                         (> (bplustree-node-size (bplustree-node-record node (1- index)))
+                            (bplustree-node-min-size (bplustree-node-record node (1- index)))))
+                    (let* ((l-node (bplustree-node-record node (1- index)))
+                           (r-node (bplustree-node-record node index))
+                           (l-node-key-i (1- (bplustree-node-num-keys l-node)))
+                           (l-node-record-i (1- (bplustree-node-size l-node))))
                       (move-records-right r-node 0)
-                      (node-key-transfer l-node r-node l-node-key-i 0 :set-source-nil t)
-                      (node-record-transfer l-node r-node l-node-record-i 0 :set-source-nil t)
-                      (when (node-internal-p r-node)
-                        (node-key-set r-node 0 (promote-first-key (node-record r-node 1) :no-shift t)))
-                      (node-key-set node (1- index) (promote-first-key r-node :no-shift t))
-                      (decf (node-size l-node))
-                      (incf (node-size r-node))))
-                   ((and (< index (1- (node-size node))) ; Transfer record from the right side node.
-                         (> (node-size (node-record node (1+ index)))
-                            (node-min-size (node-record node (1+ index)))))
-                    (let* ((l-node (node-record node index))
-                           (r-node (node-record node (1+ index)))
-                           (l-node-key-i (node-num-keys l-node))
-                           (l-node-record-i (node-size l-node)))
-                      (node-key-transfer r-node l-node 0 l-node-key-i)
-                      (node-record-transfer r-node l-node 0 l-node-record-i)
+                      (bplustree-node-key-transfer l-node r-node l-node-key-i 0 :set-source-nil t)
+                      (bplustree-node-record-transfer l-node r-node l-node-record-i 0 :set-source-nil t)
+                      (when (bplustree-node-internal-p r-node)
+                        (bplustree-node-key-set r-node 0 (promote-first-key (bplustree-node-record r-node 1) :no-shift t)))
+                      (bplustree-node-key-set node (1- index) (promote-first-key r-node :no-shift t))
+                      (decf (bplustree-node-size l-node))
+                      (incf (bplustree-node-size r-node))))
+                   ((and (< index (1- (bplustree-node-size node))) ; Transfer record from the right side node.
+                         (> (bplustree-node-size (bplustree-node-record node (1+ index)))
+                            (bplustree-node-min-size (bplustree-node-record node (1+ index)))))
+                    (let* ((l-node (bplustree-node-record node index))
+                           (r-node (bplustree-node-record node (1+ index)))
+                           (l-node-key-i (bplustree-node-num-keys l-node))
+                           (l-node-record-i (bplustree-node-size l-node)))
+                      (bplustree-node-key-transfer r-node l-node 0 l-node-key-i)
+                      (bplustree-node-record-transfer r-node l-node 0 l-node-record-i)
                       (move-records-left r-node 0)
-                      (when (node-internal-p l-node)
-                        (node-key-set l-node l-node-key-i (promote-first-key (node-record l-node l-node-record-i) :no-shift t)))
-                      (node-key-set node index (promote-first-key r-node :no-shift t))
-                      (incf (node-size l-node))
-                      (decf (node-size r-node))))
+                      (when (bplustree-node-internal-p l-node)
+                        (bplustree-node-key-set l-node l-node-key-i (promote-first-key (bplustree-node-record l-node l-node-record-i) :no-shift t)))
+                      (bplustree-node-key-set node index (promote-first-key r-node :no-shift t))
+                      (incf (bplustree-node-size l-node))
+                      (decf (bplustree-node-size r-node))))
                    (t nil)))
            (merge-node (node index)
              (loop
-                with l-node = (node-record node (- index (if (plusp index) 1 0)))
-                with r-node = (node-record node (+ index (if (plusp index) 0 1)))
-                for j from 0 below (node-size r-node)
-                for i = (node-size l-node) then (1+ i)
+                with l-node = (bplustree-node-record node (- index (if (plusp index) 1 0)))
+                with r-node = (bplustree-node-record node (+ index (if (plusp index) 0 1)))
+                for j from 0 below (bplustree-node-size r-node)
+                for i = (bplustree-node-size l-node) then (1+ i)
                 do
-                  (node-key-transfer r-node l-node j i)
-                  (node-record-transfer r-node l-node j i)
-                  (incf (node-size l-node))
+                  (bplustree-node-key-transfer r-node l-node j i)
+                  (bplustree-node-record-transfer r-node l-node j i)
+                  (incf (bplustree-node-size l-node))
                 finally
                   (move-records-left node (if (zerop index) 1 index))
-                  (setf (node-next-node l-node) (node-next-node r-node))
-                  (decf (node-size node))))
+                  (setf (bplustree-node-next-node l-node) (bplustree-node-next-node r-node))
+                  (decf (bplustree-node-size node))))
            (delete-helper (key node)
-             (if (node-internal-p node)
+             (if (bplustree-node-internal-p node)
                  (let* ((index (search-node-keys node key))
-                        (child-node (node-record node index)))
+                        (child-node (bplustree-node-record node index)))
                    (delete-helper key child-node)
-                   (when (node-underflow-p child-node)
+                   (when (bplustree-node-underflow-p child-node)
                      (unless (balance-node node index)
                        (merge-node node index))))
                  (let ((index (search-node-keys node key :record-search t)))
                    (when index
                      (move-records-left node index)
-                     (decf (node-size node)))))))
+                     (decf (bplustree-node-size node)))))))
     (delete-helper key tree)
-    (if (and (= (node-size tree) 1) (node-internal-p tree))
-        (node-record tree 0)      ; Tree losses a level.
+    (if (and (= (bplustree-node-size tree) 1) (bplustree-node-internal-p tree))
+        (bplustree-node-record tree 0)      ; Tree losses a level.
         tree)))
