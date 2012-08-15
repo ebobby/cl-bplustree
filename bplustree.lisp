@@ -103,16 +103,14 @@
 (defun move-records-right (node index)
   "Move the keys and records from the given starting point to the right."
   (loop
-     for i from (node-size node) downto index while (> i 0)
-     do
+     for i from (node-size node) downto index while (> i 0) do
        (node-key-transfer node node (1- i) i)
        (node-record-transfer node node (1- i) i)))
 
 (defun move-records-left (node index)
   "Move the keys and records going left to right from given starting point."
   (loop
-     for i from index below (node-size node)
-     do
+     for i from index below (node-size node) do
        (node-key-transfer node node (1+ i) i)
        (node-record-transfer node node (1+ i) i)))
 
