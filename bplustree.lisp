@@ -3,8 +3,7 @@
 
 (in-package :bplustree)
 
-;;; General access functions
-
+(defstruct bplustree root depth order key comparer)
 (defstruct node kind order size keys records next-node)
 
 (defmacro build-node-collection-accesors (column)
@@ -135,17 +134,17 @@
 
 (defun bplustree-new (order)
   "Makes a new B+ tree with the given order."
-  (build-node order :leaf))
+  (make-bplustree :root (build-node order :leaf) :depth 1 :order order))
 
 (defun bplustree-search (key tree)
   "Search for a record in the given tree using the given key."
-  (find-record (find-leaf-node tree key) key))
+  (find-record (find-leaf-node (bplustree-root tree) key) key))
 
 (defun bplustree-search-range (from to tree)
   "Search and return a range of records in the given tree between from and to inclusive."
   (loop
-     with current-node = (find-leaf-node tree from)
-     with initial-index = (search-node-keys tree from)
+     with current-node = (find-leaf-node (bplustree-root tree) from)
+     with initial-index = (search-node-keys current-node from)
      until (null current-node)
      appending
        (loop
@@ -159,8 +158,7 @@
             (setf initial-index 0))))
 
 (defun bplustree-insert (key record tree)
-  "Insert a record into the given tree using the given key.
-   Returns the tree with the new record inserted. This call destroys the given tree."
+  "Insert a record into the given tree using the given key. Returns the tree with the new record inserted."
   (labels ((add-record (node key record)
              (let ((index (search-node-keys node key)))
                (move-records-right node index)
@@ -201,29 +199,29 @@
                  (let ((new-node (insert-helper (find-node node key) key record))) ; Traverse down the tree.
                    (when new-node                                                  ; Did we have a split?
                      (add-key node new-node)                                       ; Insert new node into its parent.
-                     (when (node-overflow-p node)                        ; Is this node larger than it should?
+                     (when (node-overflow-p node)                                  ; Is this node larger than it should?
                        (split-node node))))                                        ; Split it.
                  (let ((update (search-node-keys node key :record-search t)))      ; Is this an update?
                    (cond (update (node-key-record-set node update key record) nil)
                          (t (add-record node key record)                           ; Add record.
-                            (when (node-overflow-p node)                 ; Illegal leaf?
+                            (when (node-overflow-p node)                           ; Illegal leaf?
                               (split-node node))))))))                             ; Split it and return new node.
-    (let ((new-node (insert-helper tree key record)))
-      (if new-node
-          (build-new-root tree new-node)                                           ; Have a new node? Build a new root.
-          tree))))
+    (let ((new-node (insert-helper (bplustree-root tree) key record)))
+      (when new-node
+        (setf (bplustree-root tree) (build-new-root (bplustree-root tree) new-node))
+        (incf (bplustree-depth tree)))
+      tree)))
 
 (defun bplustree-insert-many (tree &rest items)
   "Insert as many pairs of key/record given in the form of (key record) into the tree.
-   Returns the tree with the new records inserted. This call destroys the given tree."
+   Returns the tree with the new records inserted."
   (loop
      for (key record) in items
-     do (setf tree (bplustree-insert key record tree))
+     do (bplustree-insert key record tree)
      finally (return tree)))
 
 (defun bplustree-delete (key tree)
-  "Deletes a record from the given tree using the given key.
-   Returns the tree with the record deleted. This call destroys the given tree."
+  "Deletes a record from the given tree using the given key. Returns the tree with the record deleted."
   (labels ((balance-node (node index)
              (cond ((and (plusp index)     ; Transfer record from the left side node.
                          (> (node-size (node-record node (1- index)))
@@ -282,7 +280,9 @@
                    (when index
                      (move-records-left node index)
                      (decf (node-size node)))))))
-    (delete-helper key tree)
-    (if (and (= (node-size tree) 1) (node-internal-p tree))
-        (node-record tree 0)      ; Tree losses a level.
-        tree)))
+    (let ((root (bplustree-root tree)))
+      (delete-helper key root)
+      (when (and (= (node-size root) 1) (node-internal-p root))
+        (setf (bplustree-root tree) (node-record root 0))
+        (decf (bplustree-depth tree)))
+      tree)))
