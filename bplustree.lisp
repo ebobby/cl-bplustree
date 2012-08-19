@@ -130,9 +130,18 @@
 
 ;;; Public interface
 
-(defun bplustree-new (order)
+(defun bplustree-new (order &key
+                              (key #'identity)
+                              (comparer (lambda (n m)
+                                          (cond ((< n m) -1)
+                                                ((> n m) 1)
+                                                (t 0)))))
   "Makes a new B+ tree with the given order."
-  (make-bplustree :root (build-node order :leaf) :depth 1 :order order))
+  (make-bplustree :root (build-node order :leaf)
+                  :depth 1
+                  :order order
+                  :key key
+                  :comparer comparer))
 
 (defun bplustree-search (key tree)
   "Search for a record in the given tree using the given key."
