@@ -1,7 +1,7 @@
 
-h2. cl-bplustree -- A Common Lisp implementation of an in-memory B+ tree.
+h1. cl-bplustree - A Common Lisp implementation of an in-memory B+ tree.
 
-cl-bplustree is an implementation of a in-memory B+ tree data structure in Common Lisp.
+*cl-bplustree* is an implementation of a in-memory B+ tree data structure in Common Lisp.
 
 B+ trees main characteristics:
 
@@ -10,13 +10,13 @@ B+ trees main characteristics:
 
 For more information about B+ trees, check "Wikipedia":http://en.wikipedia.org/wiki/B%2B_tree.
 
-h3. Dependencies
+h2. Dependencies
 
 None.
 
-h3. Usage
+h2. Usage
 
-@(bplustree-new (order &key key comparer)@
+h3. @(bplustree-new (order &key key comparer)@
 
 Creates a new empty B+ tre of the given order and returns it.
 
@@ -28,7 +28,7 @@ The comparer parameter expects a function used when comparing keys against each 
 @(= a b)@ ->  0
 @(> a b)@ ->  1
 
-The meaning of this of course is given by your particular keys and your particular applications, for string keys for example string<, string>, etc., could be used.
+The meaning of this of course is given by your particular keys and your particular applications, for string keys for example @string<@, @string>@, etc., could be used.
 
 This parameter defaults to a function that implements the explained logic but for numerical keys. If your keys are numeric, you don't need to supply a comparison function.
 
@@ -36,7 +36,7 @@ Example:
 
 bc. (defparameter *my-tree* (bplustree-new 13 :key (lambda (r) (parse-integer r))))
 
-@(bplustree-insert (record tree)@
+h3. @(bplustree-insert (record tree)@
 
 Inserts the given record into the given tree. Returns the tree but is not needed to capture it and assign it, the tree is not destructed, althought its internal elements are changed by this call.
 
@@ -44,7 +44,7 @@ Example:
 
 bc. (bplustree-insert "100" *my-tree*)
 
-@(bplustree-insert-many (tree &rest items)@
+h3. @(bplustree-insert-many (tree &rest items)@
 
 Inserts all the records given into the tree. Returns the tree.
 
