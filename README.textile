@@ -38,7 +38,7 @@ bc. (defparameter *my-tree* (bplustree-new 4 :key (lambda (r) (parse-integer r))
 
 h3. @(bplustree-insert (record tree))@
 
-Inserts the given _record_ into the given _tree_, if the given key already exists in the tree, the value is updated. Returns the tree but is not needed to capture it and assign it, the tree is not destructed, althought its internal elements are changed by this call.
+Inserts the given _record_ into the given _tree_, if the given key already exists in the tree, the value is updated. Returns the tree but is not needed to capture it and assign it,this call is not destructive on the tree itself, althought its internal elements are changed by it.
 
 Example:
 
@@ -67,3 +67,17 @@ Searches the tree for all the records that exists between the given _from_ and _
 Example:
 
 bc. (bplustree-search-range 0 1000 *my-tree*) -> ("5" "10" "32" "52" "100" "212" "311")
+
+h3. @(bplustree-delete (key tree))@
+
+Deletes the record stored in the given _key_ in the _tree_. Returns the tree but is not needed to capture it and assign it, this call is not destructive on the tree itself, althought its internal elements are changed by it.
+
+Example:
+
+bc. (bplustree-delete 32 *my-tree*)
+(bplustree-search-range 0 1000 *my-tree*)
+("5" "10" "52" "100" "212" "311")
+
+h2. Final remarks
+
+I hope this code is useful to you in any sense, either for learning, reading or maybe actual practical use, I will be very glad if you can even modify it to suit your needs. If you have suggestions please send them my way. Be sure to read *COPYING* file as well.
