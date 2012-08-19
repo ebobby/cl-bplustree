@@ -1,6 +1,53 @@
 
 h2. cl-bplustree -- A Common Lisp implementation of an in-memory B+ tree.
 
+cl-bplustree is an implementation of a in-memory B+ tree data structure in Common Lisp.
+
+B+ trees main characteristics:
+
+* All the data is in the leaves, internal nodes hold only keys used for traversal, pointers between the leaves are kept, so range-retrieval is easy and efficient.
+* It is a generalization of a binary tree but instead of having only two pointers per node  to other nodes it can have many more (this is called the order of the tree) because of this characteristic the tree has typically a large fanout and a small depth.
+
+For more information about B+ trees, check "Wikipedia":http://en.wikipedia.org/wiki/B%2B_tree.
+
 h3. Dependencies
 
-NONE (so far)
+None.
+
+h3. Usage
+
+@(bplustree-new (order &key key comparer)@
+
+Creates a new empty B+ tre of the given order and returns it.
+
+The key parameter expects a function used to grab the key values (used for sorting) on whatever you are stuffing into the tree, the function will be called with one parameter (a record to be inserted into the tree for example) and it should return the value that will be used as a key. It defaults to @#'identity@.
+
+The comparer parameter expects a function used when comparing keys against each other in the tree operations. This function has to take two parameters (keys of records) and return a value depending on the following conditions:
+
+@(< a b)@ -> -1
+@(= a b)@ ->  0
+@(> a b)@ ->  1
+
+The meaning of this of course is given by your particular keys and your particular applications, for string keys for example string<, string>, etc., could be used.
+
+This parameter defaults to a function that implements the explained logic but for numerical keys. If your keys are numeric, you don't need to supply a comparison function.
+
+Example:
+
+bc. (defparameter *my-tree* (bplustree-new 13 :key (lambda (r) (parse-integer r))))
+
+@(bplustree-insert (record tree)@
+
+Inserts the given record into the given tree. Returns the tree but is not needed to capture it and assign it, the tree is not destructed, althought its internal elements are changed by this call.
+
+Example:
+
+bc. (bplustree-insert "100" *my-tree*)
+
+@(bplustree-insert-many (tree &rest items)@
+
+Inserts all the records given into the tree. Returns the tree.
+
+Example:
+
+bc. (bplustree-insert-many *my-tree* "5" "10" "-1" "1337")
