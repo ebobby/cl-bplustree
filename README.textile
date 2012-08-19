@@ -16,13 +16,13 @@ None.
 
 h2. Usage
 
-h3. @(bplustree-new (order &key key comparer)@
+h3. @(bplustree-new (order &key key comparer))@
 
 Creates a new empty B+ tre of the given order and returns it.
 
-The key parameter expects a function used to grab the key values (used for sorting) on whatever you are stuffing into the tree, the function will be called with one parameter (a record to be inserted into the tree for example) and it should return the value that will be used as a key. It defaults to @#'identity@.
+The _key_ parameter expects a function used to grab the key values (used for sorting) on whatever you are stuffing into the tree, the function will be called with one parameter (a record to be inserted into the tree for example) and it should return the value that will be used as a key. It defaults to @#'identity@.
 
-The comparer parameter expects a function used when comparing keys against each other in the tree operations. This function has to take two parameters (keys of records) and return a value depending on the following conditions:
+The _comparer_ parameter expects a function used when comparing keys against each other in the tree operations. This function has to take two parameters (keys of records) and return a value depending on the following conditions:
 
 @(< a b)@ -> -1
 @(= a b)@ ->  0
@@ -34,20 +34,36 @@ This parameter defaults to a function that implements the explained logic but fo
 
 Example:
 
-bc. (defparameter *my-tree* (bplustree-new 13 :key (lambda (r) (parse-integer r))))
+bc. (defparameter *my-tree* (bplustree-new 4 :key (lambda (r) (parse-integer r))))
 
-h3. @(bplustree-insert (record tree)@
+h3. @(bplustree-insert (record tree))@
 
-Inserts the given record into the given tree. Returns the tree but is not needed to capture it and assign it, the tree is not destructed, althought its internal elements are changed by this call.
+Inserts the given _record_ into the given _tree_, if the given key already exists in the tree, the value is updated. Returns the tree but is not needed to capture it and assign it, the tree is not destructed, althought its internal elements are changed by this call.
 
 Example:
 
 bc. (bplustree-insert "100" *my-tree*)
 
-h3. @(bplustree-insert-many (tree &rest items)@
+h3. @(bplustree-insert-many (tree &rest items))@
 
-Inserts all the records given into the tree. Returns the tree.
+Inserts all the records given into the _tree_. Returns the tree.
 
 Example:
 
-bc. (bplustree-insert-many *my-tree* "5" "10" "-1" "1337")
+bc. (bplustree-insert-many *my-tree* "5" "10" "-1" "1337" "212" "32" "311" "52")
+
+h3. @(bplustree-search (key tree))@
+
+Searches the value stored in the given _key_ in the given _tree_.
+
+Example:
+
+bc. (bplustree-search 311 *my-tree*) -> "311"
+
+h3. @(bplustree-search-range (from to tree))@
+
+Searches the tree for all the records that exists between the given _from_ and _to_ keys and returns them in a list.
+
+Example:
+
+bc. (bplustree-search-range 0 1000 *my-tree*) -> ("5" "10" "32" "52" "100" "212" "311")
