@@ -10,10 +10,13 @@
    Also returns an a-list of the inserted key/records."
   (let ((items (loop
                   for i from 1 to n
-                  for record = (random random-max)
+                  for record = (write-to-string (random random-max))
+                  do (print record)
                   collect record)))
     (values (apply #'bplustree-insert-many
-                   (bplustree-new order)
+                   (bplustree-new order
+                                  :key (lambda (r) (parse-integer r))
+                                  :comparer (lambda (n m) (cond ((< n m) 1) ((> n m) -1) (t 0))))
                    items)
             items)))
 

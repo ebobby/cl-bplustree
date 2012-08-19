@@ -26,6 +26,12 @@
        (,setter destination i-destination (,getter source i-source))
        (when set-source-nil (,setter source i-source nil)))))
 
+(defmacro with-comparer-function (tree-name &body body)
+  "Wrap code inside a block that will create a dynamic variable that holds the comparer function."
+  `(let ((*current-tree-comparer* (bplustree-comparer ,tree-name)))
+     (declare (special *current-tree-comparer*))
+     ,@body))
+
 ;; Build specialized functions to access the key and record internal collections.
 (build-node-collection-accesors key)
 (build-node-collection-accesors record)
@@ -75,12 +81,14 @@
    Keys assumed to be sorted. Optional mix and max define the search space.
    The keyword record-search indicates if you are looking for a record or a node."
   (labels ((binary-search (min max)
+             (declare (special *current-tree-comparer*))
              (if (< max min)
                  (unless record-search (1+ max))
                  (let* ((mid (+ min (ash (- max min) -1)))
-                        (k (node-key node mid)))
-                   (cond ((< key k) (binary-search min (1- mid)))
-                         ((> key k) (binary-search (1+ mid) max))
+                        (k (node-key node mid))
+                        (cmp (funcall *current-tree-comparer* key k)))
+                   (cond ((minusp cmp) (binary-search min (1- mid)))
+                         ((plusp cmp) (binary-search (1+ mid) max))
                          (t (+ mid (if record-search 0 1))))))))
     (binary-search 0 (1- (node-num-keys node)))))
 
@@ -142,24 +150,26 @@
 
 (defun bplustree-search (key tree)
   "Search for a record in the given tree using the given key."
-  (find-record (find-leaf-node (bplustree-root tree) key) key))
+  (with-comparer-function tree
+    (find-record (find-leaf-node (bplustree-root tree) key) key)))
 
 (defun bplustree-search-range (from to tree)
   "Search and return a range of records in the given tree between the given keys."
-  (loop
-     with current-node = (find-leaf-node (bplustree-root tree) from)
-     with initial-index = (search-node-keys current-node from)
-     until (null current-node)
-     appending
-       (loop
-          for i from initial-index below (node-num-keys current-node)
-          for key = (node-key current-node i)
-          for record = (node-record current-node i)
-          while (<= key to)
-          collect record
-          finally
-            (setf current-node (node-next-node current-node))
-            (setf initial-index 0))))
+  (with-comparer-function tree
+    (loop
+       with current-node = (find-leaf-node (bplustree-root tree) from)
+       with initial-index = (search-node-keys current-node from)
+       until (null current-node)
+       appending
+         (loop
+            for i from initial-index below (node-num-keys current-node)
+            for key = (node-key current-node i)
+            for record = (node-record current-node i)
+          while (<= (funcall *current-tree-comparer* key to) 0)
+            collect record
+            finally
+              (setf current-node (node-next-node current-node))
+              (setf initial-index 0)))))
 
 (defun bplustree-insert (record tree)
   "Insert a record into the given tree using the given key. Returns the tree with the new record inserted."
@@ -210,20 +220,22 @@
                          (t (add-record node key record)                           ; Add record.
                             (when (node-overflow-p node)                           ; Illegal leaf?
                               (split-node node))))))))                             ; Split it and return new node.
-    (let ((new-node (insert-helper (bplustree-root tree)
-                                   (funcall (bplustree-key tree) record)
-                                   record)))
-      (when new-node
-        (setf (bplustree-root tree) (build-new-root (bplustree-root tree) new-node))
-        (incf (bplustree-depth tree)))
-      tree)))
+    (with-comparer-function tree
+      (let ((new-node (insert-helper (bplustree-root tree)
+                                     (funcall (bplustree-key tree) record)
+                                     record)))
+        (when new-node
+          (setf (bplustree-root tree) (build-new-root (bplustree-root tree) new-node))
+          (incf (bplustree-depth tree)))
+        tree))))
 
 (defun bplustree-insert-many (tree &rest items)
   "Insert as many records given into the tree. Returns the tree with the new records inserted."
-  (loop
-     for record in items
-     do (bplustree-insert record tree)
-     finally (return tree)))
+  (with-comparer-function tree
+    (loop
+       for record in items
+       do (bplustree-insert record tree)
+       finally (return tree))))
 
 (defun bplustree-delete (key tree)
   "Deletes a record from the given tree using the given key. Returns the tree with the record deleted."
@@ -285,9 +297,10 @@
                    (when index
                      (move-records-left node index)
                      (decf (node-size node)))))))
-    (let ((root (bplustree-root tree)))
-      (delete-helper key root)
-      (when (and (= (node-size root) 1) (node-internal-p root))
-        (setf (bplustree-root tree) (node-record root 0))
-        (decf (bplustree-depth tree)))
-      tree)))
+    (with-comparer-function tree
+      (let ((root (bplustree-root tree)))
+        (delete-helper key root)
+        (when (and (= (node-size root) 1) (node-internal-p root))
+          (setf (bplustree-root tree) (node-record root 0))
+          (decf (bplustree-depth tree)))
+        tree))))
