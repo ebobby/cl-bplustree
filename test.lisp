@@ -6,13 +6,12 @@
 ;; Builds a tree with random
 (defun build-test-tree (order n &key (random-max 99999999999999999999))
   "Builds a tree with the given order and at most n elements with random records.
-   Keys are numbers and the records are the same as the keys but coerced to strings.
+   Keys are numbers band the records are the same as the keys but coerced to strings.
    Also returns an a-list of the inserted key/records."
   (let ((items (loop
                   for i from 1 to n
-                  for key = (random random-max)
-                  for record = (write-to-string key)
-                  collect (list key record))))
+                  for record = (random random-max)
+                  collect record)))
     (values (apply #'bplustree-insert-many
                    (bplustree-new order)
                    items)
@@ -23,9 +22,9 @@
    if every element insterted is searchable."
   (multiple-value-bind (tree items) (build-test-tree order n)
     (loop
-       for (key record) in items
+       for record in items for key = record
        do (format t "Searching key ~a : " key)
-         (if (string= (bplustree-search key tree) record)
+         (if (= (bplustree-search key tree) record)
              (format t "found.~%")
              (progn
                (format t "not found.~%")

@@ -26,11 +26,11 @@
        (,setter destination i-destination (,getter source i-source))
        (when set-source-nil (,setter source i-source nil)))))
 
-; Build specialized functions to access the key and record internal collections.
+;; Build specialized functions to access the key and record internal collections.
 (build-node-collection-accesors key)
 (build-node-collection-accesors record)
 
-; Build specialized functions to transfer keys and records between nodes.
+;; Build specialized functions to transfer keys and records between nodes.
 (build-node-collection-transfer key)
 (build-node-collection-transfer record)
 
@@ -40,7 +40,7 @@
 
 (defun node-overflow-p (node)
   "Does the node have more records than it should?"
-   (> (node-size node) (node-order node)))
+  (> (node-size node) (node-order node)))
 
 (defun node-underflow-p (node)
   "Does the node have less records than it should?"
@@ -132,10 +132,7 @@
 
 (defun bplustree-new (order &key
                               (key #'identity)
-                              (comparer (lambda (n m)
-                                          (cond ((< n m) -1)
-                                                ((> n m) 1)
-                                                (t 0)))))
+                              (comparer (lambda (n m) (cond ((< n m) -1) ((> n m) 1) (t 0)))))
   "Makes a new B+ tree with the given order."
   (make-bplustree :root (build-node order :leaf)
                   :depth 1
@@ -148,7 +145,7 @@
   (find-record (find-leaf-node (bplustree-root tree) key) key))
 
 (defun bplustree-search-range (from to tree)
-  "Search and return a range of records in the given tree between from and to inclusive."
+  "Search and return a range of records in the given tree between the given keys."
   (loop
      with current-node = (find-leaf-node (bplustree-root tree) from)
      with initial-index = (search-node-keys current-node from)
@@ -159,12 +156,12 @@
           for key = (node-key current-node i)
           for record = (node-record current-node i)
           while (<= key to)
-          collect (list key record)
+          collect record
           finally
             (setf current-node (node-next-node current-node))
             (setf initial-index 0))))
 
-(defun bplustree-insert (key record tree)
+(defun bplustree-insert (record tree)
   "Insert a record into the given tree using the given key. Returns the tree with the new record inserted."
   (labels ((add-record (node key record)
              (let ((index (search-node-keys node key)))
@@ -213,18 +210,19 @@
                          (t (add-record node key record)                           ; Add record.
                             (when (node-overflow-p node)                           ; Illegal leaf?
                               (split-node node))))))))                             ; Split it and return new node.
-    (let ((new-node (insert-helper (bplustree-root tree) key record)))
+    (let ((new-node (insert-helper (bplustree-root tree)
+                                   (funcall (bplustree-key tree) record)
+                                   record)))
       (when new-node
         (setf (bplustree-root tree) (build-new-root (bplustree-root tree) new-node))
         (incf (bplustree-depth tree)))
       tree)))
 
 (defun bplustree-insert-many (tree &rest items)
-  "Insert as many pairs of key/record given in the form of (key record) into the tree.
-   Returns the tree with the new records inserted."
+  "Insert as many records given into the tree. Returns the tree with the new records inserted."
   (loop
-     for (key record) in items
-     do (bplustree-insert key record tree)
+     for record in items
+     do (bplustree-insert record tree)
      finally (return tree)))
 
 (defun bplustree-delete (key tree)
