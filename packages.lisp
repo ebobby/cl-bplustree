@@ -3,7 +3,7 @@
 
 (in-package :cl-user)
 
-(defpackage :bplustree
+(defpackage :org.ebobby.bplustree
   (:use :common-lisp)
   (:export
    :bplustree-new

@@ -1,7 +1,7 @@
 ;;; General purpose in-memory B+ tree.
 ;;; Copyright (c) 2012, Francisco Soto All rights reserved (see COPYING file for details).
 
-(in-package :bplustree)
+(in-package :org.ebobby.bplustree)
 
 ;; Builds a tree with random
 (defun build-test-tree (order n &key (random-max 99999999999999999999))

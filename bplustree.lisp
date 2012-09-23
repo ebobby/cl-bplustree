@@ -1,7 +1,7 @@
 ;;; General purpose in-memory B+ tree.
 ;;; Copyright (c) 2012, Francisco Soto All rights reserved (see COPYING file for details).
 
-(in-package :bplustree)
+(in-package :org.ebobby.bplustree)
 
 (defstruct bplustree root depth order key comparer)
 (defstruct node kind order size keys records next-node)
