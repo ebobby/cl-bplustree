@@ -3,10 +3,10 @@
 
 ;;; cl-bplustree.asd
 
-(defsystem #:cl-bplustree
-    :name "cl-bplustree"
-    :author "Francisco Soto <ebobby@ebobby.org>"
-    :license "BSD"
-    :description "In-memory B+ tree"
-    :components ((:file "packages")
-                 (:file "bplustree" :depends-on ("packages"))))
+(asdf:defsystem #:cl-bplustree
+  :name "cl-bplustree"
+  :author "Francisco Soto <ebobby@ebobby.org>"
+  :license "BSD"
+  :description "In-memory B+ tree"
+  :components ((:file "packages")
+               (:file "bplustree" :depends-on ("packages"))))
