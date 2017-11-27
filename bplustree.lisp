@@ -6,6 +6,12 @@
 (defstruct bplustree root depth order key comparer)
 (defstruct node kind order size keys records next-node)
 
+(defmethod print-object ((tree bplustree) str)
+  (print-unreadable-object (tree str :identity t)
+    (princ "B+ TREE" str)
+    (princ ": " str)
+    (princ (bplustree-depth tree) str)))
+
 (defmacro build-node-collection-accesors (column)
   "Generates the getter/setter functions for the btreeplus-node internal collections, keys and records."
   (let* ((package (symbol-package column))
@@ -304,3 +310,15 @@
           (setf (bplustree-root tree) (node-record root 0))
           (decf (bplustree-depth tree)))
         tree))))
+
+(defun bplustree-traverse-node (node fn)
+  (cond ((null node))
+        ((node-internal-p node)
+         (loop for node across (node-records node)
+            do (bplustree-traverse-node node fn)))
+        (t (map nil (lambda (v)
+                      (when v
+                        (funcall fn v))) (node-records node)))))
+
+(defun bplustree-traverse (tree fn)
+  (bplustree-traverse-node (bplustree-root tree) fn))

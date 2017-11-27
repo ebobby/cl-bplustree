@@ -78,6 +78,24 @@ bc. (bplustree-delete 32 *my-tree*)
 (bplustree-search-range 0 1000 *my-tree*)
 ("5" "10" "52" "100" "212" "311")
 
+
+h3. @(bplustree-traverse (tree fn))@
+
+Traverses all records in the tree in order from smallest to largest. As the B+ trees store data sorted already this operation is not expensive.
+
+Example:
+
+bc. (bplustree-traverse *my-tree* 'print)
+"-1"
+"5"
+"10"
+"32"
+"52"
+"212"
+"311"
+"1337"
+
+
 h2. Final remarks
 
 I hope this code is useful to you in any sense, either for learning, reading or maybe actual practical use, I will be very glad if you can even modify it to suit your needs. If you have suggestions please send them my way. Be sure to read *COPYING* file as well.
