@@ -3,8 +3,8 @@
 
 (in-package :org.ebobby.bplustree)
 
-(defstruct bplustree root depth order key comparer)
-(defstruct node kind order size keys records next-node)
+(defstruct bplustree root depth order key comparer cache)
+(defstruct node kind order size keys records prev-node next-node)
 
 (defmethod print-object ((tree bplustree) str)
   (print-unreadable-object (tree str :identity t)
@@ -80,6 +80,7 @@
    :kind kind
    :keys (make-array (1+ order) :initial-element nil)
    :records (make-array (1+ order) :initial-element nil)
+   :prev-node nil
    :next-node nil))
 
 (defun search-node-keys (node key &key record-search)
@@ -159,10 +160,23 @@
                   :key key
                   :comparer comparer))
 
+(defun bplustree-empty-p (tree)
+  (let ((root (bplustree-root tree)))
+    (unless (node-internal-p root)
+      (zerop (node-size root)))))
+
 (defun bplustree-search (key tree)
   "Search for a record in the given tree using the given key."
   (with-comparer-function tree
-    (find-record (find-leaf-node (bplustree-root tree) key) key)))
+    (let ((cache (bplustree-cache tree)))
+      (cond ((and cache
+                  (zerop (funcall *current-tree-comparer* key (car cache))))
+             (cadr cache))
+            (t (let* ((leaf (find-leaf-node (bplustree-root tree) key))
+                      (res (find-record leaf key)))
+                 (when res
+                   (setf (bplustree-cache tree) (list key res leaf)))
+                 res))))))
 
 (defun bplustree-search-range (from to tree)
   "Search and return a range of records in the given tree between the given keys."
@@ -182,8 +196,96 @@
               (setf current-node (node-next-node current-node))
               (setf initial-index 0)))))
 
-(defun bplustree-insert (record tree)
-  "Insert a record into the given tree using the given key. Returns the tree with the new record inserted."
+(defun bplustree-search-next (key tree)
+  "Return the first key in `tree` after the passed `key`.
+Return the record as a second value.
+If the third values is true, then the key and value were cached."
+  (when (null tree)
+    (return-from bplustree-search-next nil))
+  (when (null key)
+    (loop for node = (bplustree-root tree) then (node-record node 0)
+       while (node-internal-p node)
+       finally
+         (return-from bplustree-search-next
+           (unless (zerop (node-size node))
+             (let ((key (node-key node 0))
+                   (res (node-record node 0)))
+               (setf (bplustree-cache tree) (list key res node))
+               (values key res))))))
+  (with-comparer-function tree
+    (let ((cache (bplustree-cache tree))
+          node index cached)
+      (cond ((and cache (zerop (funcall *current-tree-comparer* key (car cache))))
+             (setf cached t
+                   node (third cache)
+                   index (1- (search-node-keys node key))))
+            (t (setf node (find-leaf-node (bplustree-root tree) key)
+                     index (1- (search-node-keys node key)))))
+      (when (or cached
+                (>= index (node-size node))
+                (zerop (funcall *current-tree-comparer*
+                                key (node-key node index))))
+        (incf index)
+        (when (>= index (node-size node))
+          (cond ((setf node (node-next-node node))
+                 (setf index 0))
+                (t (setf node nil)))))
+      (when node
+        (let ((key (node-key node index))
+              (res (node-record node index)))
+          (when key
+            (setf (bplustree-cache tree) (list key res node))
+            (values key res cached)))))))
+
+(defun bplustree-search-prev (key tree)
+  "Return the key in `tree` before the passed `key`.
+Return the record as a second value.
+If the third values is true, then the key and value were cached."
+  (when (null tree)
+    (return-from bplustree-search-prev nil))
+  (when (null key)
+    (loop for node = (bplustree-root tree)
+       then (node-record node (1- (node-size node)))
+       while (node-internal-p node)
+       finally
+         (return-from bplustree-search-prev
+           (unless (zerop (node-size node))
+             (let* ((index (1- (node-size node)))
+                    (key (node-key node index))
+                    (res (node-record node index)))
+               (setf (bplustree-cache tree) (list key res node))
+               (values key res))))))
+  (with-comparer-function tree
+    (let ((cache (bplustree-cache tree))
+          node index cached)
+      (cond ((and cache (zerop (funcall *current-tree-comparer* key (car cache))))
+             (setf cached t
+                   node (third cache)
+                   index (1- (search-node-keys node key))))
+            (t (setf node (find-leaf-node (bplustree-root tree) key)
+                     index (1- (search-node-keys node key)))))
+      (when (or cached
+                (and (>= index 0)
+                     (zerop (funcall *current-tree-comparer*
+                                     key (node-key node index)))))
+        (decf index))
+      (when (< index 0)
+        (cond ((setf node (node-prev-node node))
+               (setf index (and node (1- (node-size node)))))
+              (t (setf node nil))))
+      (when node
+        (let ((key (node-key node index))
+              (res (node-record node index)))
+          (when key
+            (setf (bplustree-cache tree) (list key res node))
+            (values key res cached)))))))
+
+(defun bplustree-insert (record tree
+                         &optional (key (funcall (bplustree-key tree) record)))
+  "Insert a record into the given tree using the given key. Returns the tree with the new record inserted.
+If `key` is included, uses that instead of calling the key function on `record`.
+This enabled using the tree as a key/value store instead of a sorted set."
+  (setf (bplustree-cache tree) nil)
   (labels ((add-record (node key record)
              (let ((index (search-node-keys node key)))
                (move-records-right node index)
@@ -216,7 +318,11 @@
                   (decf (node-size node))
                 finally
                   (unless (node-internal-p node)
-                    (setf (node-next-node new) (node-next-node node))
+                    (setf (node-prev-node new) node)
+                    (let ((next (node-next-node node)))
+                      (when next
+                        (setf (node-prev-node next) new))
+                      (setf (node-next-node new) next))
                     (setf (node-next-node node) new))
                   (return new)))
            (insert-helper (node key record)
@@ -232,9 +338,7 @@
                             (when (node-overflow-p node)                           ; Illegal leaf?
                               (split-node node))))))))                             ; Split it and return new node.
     (with-comparer-function tree
-      (let ((new-node (insert-helper (bplustree-root tree)
-                                     (funcall (bplustree-key tree) record)
-                                     record)))
+      (let ((new-node (insert-helper (bplustree-root tree) key record)))
         (when new-node
           (setf (bplustree-root tree) (build-new-root (bplustree-root tree) new-node))
           (incf (bplustree-depth tree)))
@@ -250,6 +354,7 @@
 
 (defun bplustree-delete (key tree)
   "Deletes a record from the given tree using the given key. Returns the tree with the record deleted."
+  (setf (bplustree-cache tree) nil)
   (labels ((balance-left (node child index)
              (when (> index 0)
                (let* ((left-child (node-record node (1- index)))
@@ -309,8 +414,10 @@
                     (node-key-transfer node node index (1- index))
                     (move-records-left node index)
                     (unless internal-p
-                      (setf (node-next-node left-child)
-                            (node-next-node child)))
+                      (let ((next (node-next-node child)))
+                        (when next
+                          (setf (node-prev-node next) left-child))
+                        (setf (node-next-node left-child) next)))
                     (incf (node-size left-child) child-size)
                     (decf (node-size node)))))
            (descend (node)
@@ -338,13 +445,32 @@
         tree))))
 
 (defun bplustree-traverse-node (node fn)
+  "Call `fn` on each leaf record in `node`."
   (cond ((null node))
         ((node-internal-p node)
          (loop for node across (node-records node)
             do (bplustree-traverse-node node fn)))
-        (t (map nil (lambda (v)
-                      (when v
-                        (funcall fn v))) (node-records node)))))
+        (t (map nil
+                (lambda (v)
+                  (when v
+                    (funcall fn v)))
+                (node-records node)))))
 
 (defun bplustree-traverse (tree fn)
   (bplustree-traverse-node (bplustree-root tree) fn))
+
+(defun bplustree-traverse-node-with-keys (node fn)
+  "Call `fn` with key and record for each leaf of `node`."
+  (cond ((null node))
+        ((node-internal-p node)
+         (loop for node across (node-records node)
+            do (bplustree-traverse-node-with-keys node fn)))
+        (t (loop for i from 0 below (node-size node)
+              for k = (node-key node i)
+              for v = (node-record node i)
+              do
+                (funcall fn k v)))))
+
+(defun bplustree-traverse-with-keys (tree fn)
+  (bplustree-traverse-node-with-keys (bplustree-root tree) fn))
+
