@@ -36,13 +36,24 @@ Example:
 
 bc. (defparameter *my-tree* (bplustree-new 4 :key (lambda (r) (parse-integer r))))
 
-h3. @(bplustree-insert (record tree))@
+h3. @(bplustree-empty-p (tree))@
 
-Inserts the given _record_ into the given _tree_, if the given key already exists in the tree, the value is updated. Returns the tree but is not needed to capture it and assign it,this call is not destructive on the tree itself, althought its internal elements are changed by it.
+Returns true if the tree is empty.
 
 Example:
 
+bc. (bplustree-empty-p *my-tree*) -> T
+
+h3. @(bplustree-insert (record tree &optional key))@
+
+Inserts the given _record_ into the given _tree_, if the given key already exists in the tree, the value is updated. Returns the tree but is not needed to capture it and assign it,this call is not destructive on the tree itself, althought its internal elements are changed by it.
+
+If _key_ is omitted, calls the _key_ function passed to bplustree-new on _record_. If _key_ is included, uses that directly as the key. This enables using a B+ tree as a key/value store instead of a sorted set.
+
+Examples:
+
 bc. (bplustree-insert "100" *my-tree*)
+(bplustree-insert "100" *my-tree* 100)
 
 h3. @(bplustree-insert-many (tree &rest items))@
 
@@ -67,6 +78,30 @@ Searches the tree for all the records that exists between the given _from_ and _
 Example:
 
 bc. (bplustree-search-range 0 1000 *my-tree*) -> ("5" "10" "32" "52" "100" "212" "311")
+
+h3. @(bplustree-search-next (key tree))@
+
+Returns the first key after the passed _key_. Passing NIL for the _key_ returns the first key in the tree. The passed _key_ need not be in the tree. Still returns the first key greater than that, which IS in the tree. Returns NIL when passed the last key.
+
+The record corresponding to the key is returned as a second value. If the key was cached, T is returned as a third value.
+
+Examples:
+
+bc. (bplustree-search-next nil *my-tree*) -> (values -1 "-1")
+(bplustree-search-next -1 *my-tree*) -> (values 5 "-5" t)
+(bplustree-search-next 1337 *my-tree*) -> nil
+
+h3. @(bplustree-search-prev (key tree))@
+
+Returns the key before the passed _key_. Passing NIL for the _key_ returns the last key in the tree. The passed _key_ need not be in the tree. Still returns the first key less than that, which IS in the tree. Returns NIL when passed the first key.
+
+The record corresponding to the key is returned as a second value. If the key was cached, T is returned as a third value.
+
+Examples:
+
+bc. (bplustree-search-prev nil *my-tree*) -> (values 1337 "1337")
+(bplustree-search-prev 1337 *my-tree*) -> (values 311 "311" t)
+(bplustree-search-prev -1 *my-tree*) -> nil
 
 h3. @(bplustree-delete (key tree))@
 
@@ -94,6 +129,23 @@ bc. (bplustree-traverse *my-tree* 'print)
 "212"
 "311"
 "1337"
+
+
+h3. @(bplustree-traverse-with-keys (tree fn))@
+
+Traverses all records in the tree in order from smallest to largest, calling fn on each with two args: the key and the value. As the B+ trees store data sorted already this operation is not expensive.
+
+Example:
+
+bc. (bplustree-traverse-with-keys *my-tree* (lambda (k v) (print (list k v))))
+(-1 "-1") 
+(5 "5") 
+(10 "10") 
+(32 "32") 
+(52 "52") 
+(212 "212") 
+(311 "311") 
+(1337 "1337")
 
 
 h2. Final remarks

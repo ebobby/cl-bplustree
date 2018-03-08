@@ -7,9 +7,13 @@
   (:use :common-lisp)
   (:export
    :bplustree-new
+   :bplustree-empty-p
    :bplustree-search
    :bplustree-search-range
+   :bplustree-search-next
+   :bplustree-search-prev
    :bplustree-insert
    :bplustree-insert-many
    :bplustree-delete
-   :bplustree-traverse))
+   :bplustree-traverse
+   :bplustree-traverse-with-keys))
