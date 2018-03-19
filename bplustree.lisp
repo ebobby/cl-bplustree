@@ -223,6 +223,7 @@ If the third values is true, then the key and value were cached."
                      index (1- (search-node-keys node key)))))
       (when (or cached
                 (>= index (node-size node))
+                (< index 0)
                 (zerop (funcall *current-tree-comparer*
                                 key (node-key node index))))
         (incf index)
